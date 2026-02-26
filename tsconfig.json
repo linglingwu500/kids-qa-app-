@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "target": "es2017",
+    "module": "esnext",
+    "lib": ["es2017", "dom", "dom.iterable"],
+    "jsx": "react",
+    "strict": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "declaration": true,
+    "allowJs": true,
+    "outDir": "./",
+    "moduleResolution": {
+      "node": "node_modules",
+      "extensions": [".js", ".jsx", ".ts", ".tsx", ".json", ".node"]
+    }
+  },
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
+}
