@@ -220,6 +220,91 @@
   box-shadow: 0 4px 12px rgba(255, 107, 157, 0.15);
 }
 
+/* 语音控制按钮 */
+.voice-controls {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 2px dashed #e0e0e0;
+}
+
+.voice-play-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 60px;
+  height: 60px;
+  background: linear-gradient(135deg, #4a90e2, #6ab0f3);
+  border: 3px solid #3a7bc8;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+
+  &:active {
+    transform: scale(0.95);
+  }
+
+  &.playing {
+    background: linear-gradient(135deg, #ffc107, #ffdb4d);
+    border-color: #ff9800;
+    animation: playPulse 1s ease-in-out infinite;
+  }
+}
+
+@keyframes playPulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 15px rgba(255, 193, 7, 0);
+  }
+}
+
+.voice-icon {
+  font-size: 28px;
+}
+
+.voice-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(74, 144, 226, 0.1);
+  border: 2px solid #4a90e2;
+  border-radius: 12px;
+  padding: 10px 16px;
+  transition: all 0.2s ease;
+
+  &:active {
+    background: rgba(74, 144, 226, 0.15);
+    transform: scale(0.98);
+  }
+}
+
+.toggle-icon {
+  font-size: 22px;
+}
+
+.toggle-text {
+  font-size: 20px;
+  color: #4a90e2;
+  font-weight: 600;
+}
+
+.voice-only-hint {
+  display: flex;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(74, 144, 226, 0.05);
+  border-radius: 12px;
+}
+
+.hint-text {
+  font-size: 24px;
+  color: #999;
+  font-style: italic;
+}
+
 .answer-text {
   font-size: 28px;
   color: #333;
@@ -333,6 +418,115 @@
   }
 }
 
+.input-mode-toggle {
+  position: absolute;
+  top: 50%;
+  right: 16px;
+  transform: translateY(-50%);
+  padding: 8px;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+
+  &:active {
+    background: rgba(74, 144, 226, 0.1);
+  }
+}
+
+.toggle-icon {
+  font-size: 28px;
+}
+
+.voice-input-wrapper {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  background: linear-gradient(135deg, #ff6b9d, #ff9db9);
+  border: 3px solid #ff4a8c;
+  border-radius: 20px;
+  overflow: hidden;
+  min-height: 80px;
+}
+
+.voice-input-content {
+  flex: 1;
+  padding: 16px 20px;
+}
+
+.recording-status {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.recording-icon {
+  font-size: 40px;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 0.8;
+  }
+}
+
+.recording-text {
+  font-size: 24px;
+  color: #fff;
+  font-weight: 600;
+}
+
+.recording-time {
+  font-size: 32px;
+  color: #fff;
+  font-weight: bold;
+  font-family: monospace;
+}
+
+.stop-record-btn {
+  background: rgba(255, 255, 255, 0.3);
+  border: 2px solid #fff;
+  border-radius: 12px;
+  color: #fff;
+  font-size: 22px;
+  font-weight: 600;
+  padding: 8px 24px;
+  min-height: 50px;
+  line-height: 34px;
+
+  &:active {
+    background: rgba(255, 255, 255, 0.4);
+  }
+
+  &::after {
+    border: none;
+  }
+}
+
+.voice-prompt {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 12px;
+  cursor: pointer;
+}
+
+.voice-prompt-icon {
+  font-size: 36px;
+}
+
+.voice-prompt-text {
+  font-size: 24px;
+  color: #fff;
+  font-weight: 600;
+}
+
 .question-input {
   width: 100%;
   font-size: 28px;
@@ -345,7 +539,7 @@
 .char-count {
   position: absolute;
   bottom: 8px;
-  right: 16px;
+  right: 50px;
   font-size: 20px;
   color: #999;
 }
