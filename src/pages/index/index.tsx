@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from 'react'
-import { View, Text, Textarea, Button, ScrollView } from '@tarojs/components'
+import React, { useState, useEffect, useRef } from 'react'
+import { View, Text, Textarea, Button, ScrollView, Canvas } from '@tarojs/components'
 import Taro, { useRouter } from '@tarojs/taro'
 import { getChildInfo, saveQuestion, updateQuestionWithAnswer } from '../../store/child'
 import { generateChildFriendlyAnswer } from '../../services/ai'
 import { formatRelativeTime } from '../../utils/format'
+import { voiceService, ASRResult } from '../../services/voice'
+import { type ASRResult as RealtimeASRResult, type ChatResult, type TTSResult as RealtimeTTSResult } from '../../services/doubao-realtime'
 import './index.scss'
 
 // 认知发展阶段
@@ -58,13 +60,31 @@ const Index = () => {
   const [childAge, setChildAge] = useState('')
 
   // 语音相关状态
-  const [inputMode, setInputMode] = useState<'text' | 'voice'>('text')
+  const [inputMode, setInputMode] = useState<'text' | 'voice'>('voice')
   const [isRecording, setIsRecording] = useState(false)
   const [recordingTime, setRecordingTime] = useState(0)
   const [recordingTimer, setRecordingTimer] = useState<NodeJS.Timeout | null>(null)
+  const [recognitionProgress, setRecognitionProgress] = useState(false)
+  const [currentVolume, setCurrentVolume] = useState(0) // 当前音量（0-1）
+  const [volumeHistory, setVolumeHistory] = useState<number[]>([]) // 音量历史，用于波形显示
+  const [isCancelingRecording, setIsCancelingRecording] = useState(false) // 是否正在上滑取消录音
+  const [touchStartY, setTouchStartY] = useState(0) // 触摸开始Y坐标
+
+  // 使用 useRef 来同步状态，避免 useState 异步更新的问题
+  const isRecordingRef = React.useRef(false)
+  const isCancelingRecordingRef = React.useRef(false)
 
   // 音频播放器
   const [innerAudio, setInnerAudio] = useState<Taro.InnerAudioContext | null>(null)
+  const [playProgress, setPlayProgress] = useState(0) // 播放进度（0-1）
+  const [playDuration, setPlayDuration] = useState(0) // 总时长（秒）
+
+  // 实时语音服务状态
+  const [realtimeConnected, setRealtimeConnected] = useState(false)
+  const [realtimeSessionActive, setRealtimeSessionActive] = useState(false)
+  const [realtimeAsrText, setRealtimeAsrText] = useState('') // 实时识别文本
+  const [realtimeChatText, setRealtimeChatText] = useState('') // 实时聊天回复文本
+  const [isRealtimeSpeaking, setIsRealtimeSpeaking] = useState(false) // 是否正在播放 AI 回复
 
   const router = useRouter()
 
@@ -132,6 +152,158 @@ const Index = () => {
       console.error('滚动失败:', error)
     }
   }, [chatMessages.length])
+
+  // 初始化实时语音服务
+  useEffect(() => {
+    // 检查是否使用实时模式
+    if (voiceService.getMode() !== 'doubao-realtime') {
+      console.log('非实时模式，跳过 WebSocket 连接')
+      return
+    }
+
+    console.log('=== 初始化实时语音服务 ===')
+
+    // 设置回调
+    voiceService.setRealtimeCallbacks({
+      onASRResult: (result: RealtimeASRResult) => {
+        console.log('收到 ASR 结果:', result)
+        setRealtimeAsrText(result.text)
+
+        // 如果是最终结果，提交问题
+        if (result.isFinal && result.text.trim()) {
+          submitQuestionMessage(result.text)
+        }
+      },
+      onChatResponse: (result: ChatResult) => {
+        console.log('收到 LLM 回复:', result)
+        if (result.text) {
+          setRealtimeChatText(prev => prev + result.text)
+        }
+      },
+      onTTSResult: (result: RealtimeTTSResult) => {
+        console.log('收到 TTS 结果:', result)
+
+        // 如果有音频数据，播放
+        if (result.audioData) {
+          playTTSAudio(result.audioData)
+        }
+      },
+      onError: (error: string) => {
+        console.error('实时服务错误:', error)
+        Taro.showToast({ title: error, icon: 'none' })
+      }
+    })
+
+    // 连接服务
+    const initRealtimeService = async () => {
+      try {
+        console.log('正在连接实时语音服务...')
+        await voiceService.connectRealtimeService()
+        setRealtimeConnected(true)
+        console.log('实时语音服务连接成功')
+
+        // 启动会话
+        voiceService.startRealtimeSession()
+        setRealtimeSessionActive(true)
+        console.log('实时语音会话已启动')
+      } catch (error) {
+        console.error('连接实时语音服务失败:', error)
+        Taro.showToast({ title: '连接语音服务失败', icon: 'none' })
+      }
+    }
+
+    initRealtimeService()
+
+    // 清理函数
+    return () => {
+      console.log('=== 清理实时语音服务 ===')
+      voiceService.endRealtimeSession()
+      voiceService.disconnectRealtimeService()
+      setRealtimeConnected(false)
+      setRealtimeSessionActive(false)
+    }
+  }, [])
+
+  // 播放 TTS 音频
+  const playTTSAudio = (audioData: ArrayBuffer) => {
+    try {
+      if (!innerAudio) {
+        console.warn('音频播放器未初始化')
+        return
+      }
+
+      // 将 PCM 转换为 WAV 格式
+      const wavData = pcmToWav(audioData, 16000, 1, 16)
+
+      // 保存为临时文件
+      const tempFilePath = `${Taro.env.USER_DATA_PATH}/tts_${Date.now()}.wav`
+      Taro.getFileSystemManager().writeFile({
+        filePath: tempFilePath,
+        data: wavData,
+        encoding: 'binary',
+        success: () => {
+          console.log('TTS 音频保存成功:', tempFilePath)
+          innerAudio.src = tempFilePath
+          setIsRealtimeSpeaking(true)
+          innerAudio.play()
+        },
+        fail: (err) => {
+          console.error('保存 TTS 音频失败:', err)
+        }
+      })
+
+      // 监听播放结束
+      innerAudio.onEnded(() => {
+        setIsRealtimeSpeaking(false)
+        setRealtimeChatText('')
+      })
+    } catch (error) {
+      console.error('播放 TTS 音频失败:', error)
+    }
+  }
+
+  // 将 PCM 数据转换为 WAV 格式
+  const pcmToWav = (pcmData: ArrayBuffer, sampleRate: number, channels: number, bits: number): ArrayBuffer => {
+    const byteRate = sampleRate * channels * bits / 8
+    const blockAlign = channels * bits / 8
+    const dataSize = pcmData.byteLength
+    const bufferSize = 44 + dataSize
+
+    const buffer = new ArrayBuffer(bufferSize)
+    const view = new DataView(buffer)
+
+    // RIFF header
+    writeString(view, 0, 'RIFF')
+    view.setUint32(4, 36 + dataSize, true)
+    writeString(view, 8, 'WAVE')
+
+    // fmt chunk
+    writeString(view, 12, 'fmt ')
+    view.setUint32(16, 16, true)  // Subchunk1Size
+    view.setUint16(20, 1, true)   // AudioFormat (1 for PCM)
+    view.setUint16(22, channels, true)
+    view.setUint32(24, sampleRate, true)
+    view.setUint32(28, byteRate, true)
+    view.setUint16(32, blockAlign, true)
+    view.setUint16(34, bits, true)
+
+    // data chunk
+    writeString(view, 36, 'data')
+    view.setUint32(40, dataSize, true)
+
+    // Write PCM data
+    const pcmView = new Uint8Array(pcmData)
+    const bufferView = new Uint8Array(buffer)
+    bufferView.set(pcmView, 44)
+
+    return buffer
+  }
+
+  const writeString = (view: DataView, offset: number, string: string) => {
+    for (let i = 0; i < string.length; i++) {
+      view.setUint8(offset + i, string.charCodeAt(i))
+    }
+  }
 
   const handleInputChange = (e: any) => {
     setQuestion(e.detail.value)
@@ -265,75 +437,434 @@ const Index = () => {
     }
   }
 
-  // 开始录音
-  const handleStartRecording = () => {
+  // 开始录音（长按触发）
+  const handleStartRecording = async () => {
     try {
-      const recorderManager = Taro.getRecorderManager()
+      console.log('=== 开始录音 ===', {
+        isRecording: isRecordingRef.current,
+        isCancelingRecording: isCancelingRecordingRef.current
+      })
 
-      recorderManager.onStart(() => {
-        console.log('录音开始')
+      // 如果已经在录音状态，直接返回
+      if (isRecordingRef.current) {
+        console.log('录音已在进行中，忽略')
+        return
+      }
+
+      // 检查是否已设置孩子信息
+      if (!childInfo) {
+        Taro.showToast({ title: '请先设置孩子信息', icon: 'none', duration: 2000 })
+        setShowSetup(true)
+        return
+      }
+
+      console.log('准备检查录音权限...')
+
+      // 检查录音权限
+      const setting = await Taro.getSetting()
+      console.log('权限设置:', setting)
+
+      if (!setting.authSetting['scope.record']) {
+        console.log('首次请求录音权限')
+        try {
+          await Taro.authorize({ scope: 'scope.record' })
+          console.log('录音权限授权成功')
+        } catch (error) {
+          console.error('录音权限授权失败:', error)
+          Taro.showModal({
+            title: '需要录音权限',
+            content: '为了使用语音输入功能，请授权麦克风权限',
+            showCancel: false
+          })
+          return
+        }
+      } else if (setting.authSetting['scope.record'] === false) {
+        console.log('录音权限被拒绝')
+        Taro.showModal({
+          title: '录音权限被拒绝',
+          content: '请在设置中开启麦克风权限',
+          confirmText: '去设置',
+          success: (res) => {
+            if (res.confirm) {
+              Taro.openSetting()
+            }
+          }
+        })
+        return
+      }
+
+      console.log('准备开始录音...')
+
+      // 清理之前的状态
+      setRecordingTime(0)
+      setVolumeHistory([])
+      setIsCancelingRecording(false)
+      isCancelingRecordingRef.current = false
+
+      // 启动计时器
+      const timer = setInterval(() => {
+        setRecordingTime(prev => prev + 1)
+      }, 1000)
+      setRecordingTimer(timer)
+
+      // 启动音量采样定时器（用于波形显示）
+      const volumeTimer = setInterval(() => {
+        const newVolume = Math.random() * 0.5 + 0.2
+        setCurrentVolume(newVolume)
+
+        setVolumeHistory(prev => {
+          const newHistory = [...prev, newVolume]
+          return newHistory.slice(-50)
+        })
+      }, 100)
+
+      // 开始录音（等待 onStart 事件才更新 isRecording）
+      console.log('调用 voiceService.startRecording...')
+
+      try {
+        // 实时模式需要使用 WAV 格式
+        const format = voiceService.getMode() === 'doubao-realtime' ? 'wav' : 'mp3'
+
+        await voiceService.startRecording({
+          duration: 60000,
+          format: format,
+          sampleRate: 16000,
+          numberOfChannels: 1,
+          encodeBitRate: 48000,
+          frameSize: 50
+        })
+
+        // startRecording resolve 后，更新状态
         setIsRecording(true)
-        setRecordingTime(0)
+        isRecordingRef.current = true
 
-        // 启动计时器
-        const timer = setInterval(() => {
-          setRecordingTime(prev => prev + 1)
-        }, 1000)
-        setRecordingTimer(timer)
-      })
+        Taro.vibrateShort({ type: 'medium' })
+        console.log('=== 录音已启动 ===')
+      } catch (error) {
+        console.error('开始录音失败:', error)
 
-      recorderManager.onStop((res: any) => {
-        console.log('录音结束', res)
-        setIsRecording(false)
-        setRecordingTime(0)
-
+        // 清理定时器
         if (recordingTimer) {
           clearInterval(recordingTimer)
           setRecordingTimer(null)
         }
 
-        // 使用模拟的语音识别（实际项目中需要接入真实的语音识别服务）
-        const mockRecognizedText = getMockRecognizedText()
-        setQuestion(mockRecognizedText)
-        setInputMode('text')
-        Taro.showToast({ title: '识别成功', icon: 'success' })
-      })
-
-      recorderManager.onError((err: any) => {
-        console.error('录音错误:', err)
-        setIsRecording(false)
-        setRecordingTime(0)
-
-        if (recordingTimer) {
-          clearInterval(recordingTimer)
-          setRecordingTimer(null)
-        }
-
-        Taro.showToast({ title: '录音失败', icon: 'none' })
-      })
-
-      // 开始录音
-      recorderManager.start({
-        duration: 60000, // 最长60秒
-        format: 'mp3',
-        sampleRate: 16000,
-        numberOfChannels: 1,
-        encodeBitRate: 48000,
-        frameSize: 50
-      })
+        // 不更新 isRecording 状态，让用户可以重试
+        Taro.showToast({ title: '开始录音失败，请重试', icon: 'none' })
+      }
     } catch (error) {
-      console.error('开始录音失败:', error)
-      Taro.showToast({ title: '开始录音失败', icon: 'none' })
+      console.error('handleStartRecording 异常:', error)
+      Taro.showToast({ title: '录音异常，请重试', icon: 'none' })
     }
   }
 
-  // 停止录音
-  const handleStopRecording = () => {
+  // 录音触摸开始
+  const handleVoiceTouchStart = (e: any) => {
     try {
-      const recorderManager = Taro.getRecorderManager()
-      recorderManager.stop()
+      console.log('=== 触摸开始 ===', e)
+      const touch = e.touches[0]
+      setTouchStartY(touch.clientY)
+      console.log('触摸Y:', touch.clientY)
+
+      // 延迟启动录音，避免重复触发
+      setTimeout(() => {
+        handleStartRecording()
+      }, 100)
     } catch (error) {
-      console.error('停止录音失败:', error)
+      console.error('触摸开始失败:', error)
+    }
+  }
+
+  // 录音触摸移动
+  const handleVoiceTouchMove = (e: any) => {
+    try {
+      if (!isRecordingRef.current) return
+
+      const touch = e.touches[0]
+      const deltaY = touch.clientY - touchStartY
+
+      console.log('触摸移动 - deltaY:', deltaY)
+
+      // 如果上滑超过 100px，显示取消状态
+      if (deltaY < -100) {
+        setIsCancelingRecording(true)
+        isCancelingRecordingRef.current = true
+        console.log('显示取消状态')
+      } else {
+        setIsCancelingRecording(false)
+        isCancelingRecordingRef.current = false
+      }
+    } catch (error) {
+      console.error('触摸移动失败:', error)
+    }
+  }
+
+  // 录音触摸结束
+  const handleVoiceTouchEnd = async () => {
+    try {
+      console.log('=== 触摸结束 ===', {
+        isRecording: isRecordingRef.current,
+        isCancelingRecording: isCancelingRecordingRef.current,
+        mode: voiceService.getMode()
+      })
+
+      if (!isRecordingRef.current) return
+
+      // 如果正在取消录音
+      if (isCancelingRecordingRef.current) {
+        console.log('取消录音')
+        setIsCancelingRecording(false)
+        isCancelingRecordingRef.current = false
+
+        if (recordingTimer) {
+          clearInterval(recordingTimer)
+          setRecordingTimer(null)
+        }
+
+        setIsRecording(false)
+        isRecordingRef.current = false
+        setRecordingTime(0)
+        setVolumeHistory([])
+        setCurrentVolume(0)
+
+        // 取消录音
+        try {
+          await voiceService.cancelRecording()
+        } catch (error) {
+          console.error('取消录音失败:', error)
+        }
+
+        Taro.showToast({ title: '已取消录音', icon: 'none' })
+        return
+      }
+
+      // 停止录音
+      console.log('停止录音')
+
+      if (recordingTimer) {
+        clearInterval(recordingTimer)
+        setRecordingTimer(null)
+      }
+
+      // 如果是实时模式，处理不同
+      if (voiceService.getMode() === 'doubao-realtime') {
+        console.log('实时模式：发送音频到服务')
+
+        // 停止录音获取音频文件路径
+        const result = await voiceService.stopRecording()
+
+        setIsRecording(false)
+        isRecordingRef.current = false
+        setRecordingTime(0)
+        setVolumeHistory([])
+        setCurrentVolume(0)
+
+        if (result.success && result.tempFilePath) {
+          // 发送音频到实时服务
+          try {
+            await voiceService.sendAudioToRealtime(result.tempFilePath)
+            Taro.showToast({ title: '发送成功', icon: 'success' })
+          } catch (error) {
+            console.error('发送音频失败:', error)
+            Taro.showToast({ title: '发送失败', icon: 'none' })
+          }
+        }
+      } else {
+        // 级联模式：停止录音并识别
+        console.log('级联模式：停止录音并识别')
+        setRecognitionProgress(true)
+        Taro.showToast({ title: '正在识别...', icon: 'loading', duration: 2000 })
+
+        const result: ASRResult = await voiceService.stopRecording()
+
+        setIsRecording(false)
+        isRecordingRef.current = false
+        setRecordingTime(0)
+        setVolumeHistory([])
+        setCurrentVolume(0)
+        setRecognitionProgress(false)
+
+        console.log('识别结果:', result)
+
+        if (result.success && result.text) {
+          // 1. 设置识别的文字
+          setQuestion(result.text)
+
+          // 2. 直接提交消息，不通过 setQuestion 的方式
+          await submitQuestionMessage(result.text)
+
+          // 3. 清空输入框
+          setQuestion('')
+
+          // 4. 切换回语音输入模式
+          setInputMode('voice')
+
+          Taro.showToast({ title: '发送成功', icon: 'success' })
+        } else {
+          Taro.showToast({ title: result.errorMessage || '识别失败，请重试', icon: 'none' })
+        }
+      }
+    } catch (error) {
+      console.error('录音处理失败:', error)
+      setIsRecording(false)
+      isRecordingRef.current = false
+      setRecordingTime(0)
+      setVolumeHistory([])
+      setCurrentVolume(0)
+      setRecognitionProgress(false)
+
+      Taro.showToast({ title: '录音处理失败', icon: 'none' })
+    }
+  }
+
+  // 提交问题消息（用于语音识别后自动提交）
+  const submitQuestionMessage = async (questionText: string) => {
+    try {
+      console.log('=== 提交问题消息 ===', questionText)
+
+      // 检查是否已设置孩子信息
+      if (!childInfo) {
+        Taro.showToast({ title: '请先设置孩子信息', icon: 'none' })
+        return
+      }
+
+      setIsSubmitting(true)
+
+      // 添加用户消息到聊天记录
+      const userMessage: ChatMessage = {
+        id: Date.now().toString(),
+        role: 'user',
+        content: questionText,
+        timestamp: new Date().toISOString()
+      }
+      setChatMessages(prev => [...prev, userMessage])
+
+      // 保存问题
+      const questionData = {
+        id: userMessage.id,
+        content: questionText,
+        childName: childInfo.name,
+        childAge: childInfo.age,
+        childStage: selectedStage,
+        createdAt: userMessage.timestamp
+      }
+      saveQuestion(questionData)
+
+      // 调用 AI 生成回答
+      console.log('=== 调用 AI 生成回答 ===')
+      const answer = await generateChildFriendlyAnswer(
+        questionText,
+        childInfo.age,
+        selectedStage,
+        childInfo.name
+      )
+      console.log('=== AI 回答 ===', answer)
+
+      // 更新问题，添加回答
+      updateQuestionWithAnswer(questionData.id, answer)
+
+      // 添加AI回答消息到聊天记录（显示文字回答）
+      const assistantMessage: ChatMessage = {
+        id: Date.now().toString() + '_ans',
+        role: 'assistant',
+        content: answer.content,
+        simpleExplanation: answer.simpleExplanation,
+        curiosityQuestions: answer.curiosityQuestions,
+        timestamp: new Date().toISOString()
+      }
+      setChatMessages(prev => [...prev, assistantMessage])
+
+      console.log('=== 消息提交完成 ===')
+    } catch (error) {
+      console.error('提交失败:', error)
+      Taro.showToast({ title: '提交失败，请重试', icon: 'none' })
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  // 取消录音
+  const handleCancelRecording = async () => {
+    try {
+      if (recordingTimer) {
+        clearInterval(recordingTimer)
+        setRecordingTimer(null)
+      }
+
+      setIsCancelingRecording(false)
+      isCancelingRecordingRef.current = false
+      setIsRecording(false)
+      isRecordingRef.current = false
+      setRecordingTime(0)
+      setVolumeHistory([])
+      setCurrentVolume(0)
+
+      // 取消录音
+      await voiceService.cancelRecording()
+
+      Taro.showToast({ title: '已取消录音', icon: 'none' })
+    } catch (error) {
+      console.error('取消录音失败:', error)
+      Taro.showToast({ title: '取消录音失败', icon: 'none' })
+    }
+  }
+
+  // 完成录音并发送
+  const handleCompleteRecording = async () => {
+    try {
+      if (recordingTimer) {
+        clearInterval(recordingTimer)
+        setRecordingTimer(null)
+      }
+
+      // 实时模式下直接发送
+      if (voiceService.getMode() === 'doubao-realtime') {
+        console.log('实时模式：完成录音并发送')
+        const result: ASRResult = await voiceService.stopRecording()
+
+        setIsRecording(false)
+        isRecordingRef.current = false
+        setRecordingTime(0)
+        setVolumeHistory([])
+        setCurrentVolume(0)
+
+        if (result.success && result.tempFilePath) {
+          await voiceService.sendAudioToRealtime(result.tempFilePath)
+          Taro.showToast({ title: '发送成功', icon: 'success' })
+        }
+      } else {
+        setRecognitionProgress(true)
+        Taro.showToast({ title: '正在识别...', icon: 'loading', duration: 2000 })
+
+        const result: ASRResult = await voiceService.stopRecording()
+
+        setIsRecording(false)
+        isRecordingRef.current = false
+        setRecordingTime(0)
+        setVolumeHistory([])
+        setCurrentVolume(0)
+        setRecognitionProgress(false)
+
+        console.log('识别结果:', result)
+
+        if (result.success && result.text) {
+          setQuestion(result.text)
+          setInputMode('text')
+          Taro.showToast({ title: '识别成功', icon: 'success' })
+        } else {
+          Taro.showToast({ title: result.errorMessage || '识别失败，请重试', icon: 'none' })
+        }
+      }
+    } catch (error) {
+      console.error('录音处理失败:', error)
+      setIsRecording(false)
+      isRecordingRef.current = false
+      setRecordingTime(0)
+      setVolumeHistory([])
+      setCurrentVolume(0)
+      setRecognitionProgress(false)
+
+      Taro.showToast({ title: '录音处理失败', icon: 'none' })
     }
   }
 
@@ -344,78 +875,47 @@ const Index = () => {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
   }
 
-  // 模拟语音识别结果（实际项目中需要接入真实的语音识别服务）
-  const getMockRecognizedText = (): string => {
-    const questions = [
-      '天为什么是蓝色的？',
-      '小鸟为什么会飞？',
-      '月亮为什么有圆有缺？',
-      '彩虹是怎么形成的？',
-      '为什么会有四季变化？',
-      '星星为什么会发光？',
-      '鱼为什么能在水里呼吸？'
-    ]
-    return questions[Math.floor(Math.random() * questions.length)]
-  }
-
   // 播放语音回答
-  const handlePlayVoice = (message: ChatMessage) => {
+  const handlePlayVoice = async (message: ChatMessage) => {
     try {
-      if (!innerAudio) {
-        Taro.showToast({ title: '音频播放器未初始化', icon: 'none' })
-        return
-      }
+      const wasPlaying = message.isPlaying
 
       // 更新所有消息的播放状态
       setChatMessages(prev =>
-        prev.map(m => ({ ...m, isPlaying: m.id === message.id }))
+        prev.map(m => ({ ...m, isPlaying: wasPlaying ? false : m.id === message.id }))
       )
 
-      // 使用 TTS 播放文本
-      const textToPlay = message.content + (message.simpleExplanation ? `\n${message.simpleExplanation}` : '')
+      // 如果正在播放，则暂停
+      if (wasPlaying) {
+        if (innerAudio) {
+          innerAudio.pause()
+          innerAudio.stop()
+        }
+        setPlayProgress(0)
+        return
+      }
 
-      // 调用微信语音合成 API
-      Taro.getBackgroundAudioManager().play({
-        src: '', // TTS 生成的音频地址（实际使用时需要真实的音频地址）
-        title: '回答',
-        author: '好奇宝宝'
+      // TODO: 接入真实的 TTS 服务后，使用 voiceService.playText()
+      // 目前暂时显示提示，等待接入 TTS 服务
+      Taro.showToast({
+        title: '语音功能正在接入中',
+        icon: 'none',
+        duration: 2000
       })
 
-      // 由于微信小程序 TTS 需要后端服务支持，这里使用 Web Speech API 作为替代方案
-      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-        const utterance = new SpeechSynthesisUtterance(textToPlay)
-        utterance.lang = 'zh-CN'
-        utterance.rate = 0.9
-        utterance.pitch = 1.1
+      // 恢复播放状态
+      setTimeout(() => {
+        setChatMessages(prev =>
+          prev.map(m => ({ ...m, isPlaying: false }))
+        )
+      }, 2000)
 
-        utterance.onend = () => {
-          setChatMessages(prev =>
-            prev.map(m => ({ ...m, isPlaying: false }))
-          )
-        }
-
-        utterance.onerror = () => {
-          setChatMessages(prev =>
-            prev.map(m => ({ ...m, isPlaying: false }))
-          )
-          Taro.showToast({ title: '语音播放失败', icon: 'none' })
-        }
-
-        window.speechSynthesis.speak(utterance)
-      } else {
-        // 如果不支持 Web Speech API，使用 Toast 提示
-        setTimeout(() => {
-          setChatMessages(prev =>
-            prev.map(m => ({ ...m, isPlaying: false }))
-          )
-          Taro.showToast({ title: '当前环境不支持语音播放', icon: 'none' })
-        }, 500)
-      }
     } catch (error) {
       console.error('播放语音失败:', error)
       setChatMessages(prev =>
         prev.map(m => ({ ...m, isPlaying: false }))
       )
+      setPlayProgress(0)
       Taro.showToast({ title: '播放语音失败', icon: 'none' })
     }
   }
@@ -502,6 +1002,19 @@ const Index = () => {
         </View>
       </View>
 
+      {/* 实时语音连接状态 */}
+      {voiceService.getMode() === 'doubao-realtime' && (
+        <View className={`realtime-status ${realtimeConnected ? 'connected' : 'disconnected'}`}>
+          <Text className="status-icon">{realtimeConnected ? '🟢' : '🔴'}</Text>
+          <Text className="status-text">
+            {realtimeConnected ? '实时语音已连接' : '实时语音连接中...'}
+          </Text>
+          {isRealtimeSpeaking && (
+            <Text className="speaking-indicator">🔊 说话中...</Text>
+          )}
+        </View>
+      )}
+
       {/* 年龄段选择器 */}
       <View className="age-stage-section">
         <Text className="section-label">选择回答难度：</Text>
@@ -574,6 +1087,22 @@ const Index = () => {
                             {message.isPlaying ? '⏸️' : '🔊'}
                           </Text>
                         </View>
+
+                        {/* 播放进度条（仅播放时显示） */}
+                        {message.isPlaying && (
+                          <View className="play-progress">
+                            <View className="progress-bar">
+                              <View
+                                className="progress-fill"
+                                style={{ width: `${playProgress * 100}%` }}
+                              />
+                            </View>
+                            <Text className="progress-time">
+                              {Math.floor(playProgress * playDuration)}s
+                            </Text>
+                          </View>
+                        )}
+
                         <View
                           className="voice-toggle-btn"
                           onClick={() => handleToggleText(message)}
@@ -646,12 +1175,66 @@ const Index = () => {
           <Text className="parent-entry-text">家长中心</Text>
         </View>
 
-        {/* 文字输入模式 */}
-        {inputMode === 'text' ? (
+        {/* 语音输入模式（默认） */}
+        {inputMode === 'voice' ? (
+          <View className="voice-input-wrapper">
+            <View className="voice-input-content">
+              {recognitionProgress ? (
+                /* 识别中状态 */
+                <View className="recognition-progress">
+                  <Text className="recognition-icon">🔄</Text>
+                  <Text className="recognition-text">识别中...</Text>
+                </View>
+              ) : isRecording ? (
+                /* 录音中状态 */
+                <View
+                  className="recording-status"
+                  onTouchStart={handleVoiceTouchStart}
+                  onTouchMove={handleVoiceTouchMove}
+                  onTouchEnd={handleVoiceTouchEnd}
+                >
+                  {/* 录音波形动画 */}
+                  <View className="waveform-container">
+                    {Array.from({ length: 20 }).map((_, i) => (
+                      <View
+                        key={i}
+                        className={`wave-bar ${currentVolume > 0.3 ? 'active' : ''}`}
+                        style={{
+                          height: `${20 + Math.random() * 40}px`,
+                          animationDelay: `${i * 0.05}s`
+                        }}
+                      />
+                    ))}
+                  </View>
+                  <Text className="recording-icon">🎙️</Text>
+                  <Text className="recording-text">
+                    {isCancelingRecording ? '松手取消' : '松手发送'}
+                  </Text>
+                  <Text className="recording-time">{formatRecordingTime(recordingTime)}</Text>
+                </View>
+              ) : (
+                /* 默认状态：按住说话 */
+                <View
+                  className="voice-prompt"
+                  onTouchStart={handleVoiceTouchStart}
+                  onTouchMove={handleVoiceTouchMove}
+                  onTouchEnd={handleVoiceTouchEnd}
+                >
+                  <Text className="voice-prompt-icon">🎙️</Text>
+                  <Text className="voice-prompt-text">按住说话</Text>
+                </View>
+              )}
+            </View>
+            <View className="input-mode-toggle" onClick={handleToggleInputMode}>
+              <Text className="toggle-icon">⌨️</Text>
+            </View>
+          </View>
+        ) : (
+          /* 文字输入模式 */
           <View className="input-wrapper">
             <Textarea
               className="question-input"
-              placeholder="在这里写下你的问题..."
+              placeholder="在这里写下你的问题"
               value={question}
               onInput={handleInputChange}
               maxlength={500}
@@ -660,44 +1243,25 @@ const Index = () => {
               adjustPosition
               disableDefaultPadding
             />
-            <Text className="char-count">{question.length}/500</Text>
+            {question.trim() && (
+              <Text className="char-count">{question.length}/500</Text>
+            )}
             <View className="input-mode-toggle" onClick={handleToggleInputMode}>
               <Text className="toggle-icon">🎙️</Text>
             </View>
           </View>
-        ) : (
-          /* 语音输入模式 */
-          <View className="voice-input-wrapper">
-            <View className="voice-input-content">
-              {isRecording ? (
-                <View className="recording-status">
-                  <Text className="recording-icon">🎤</Text>
-                  <Text className="recording-text">录音中...</Text>
-                  <Text className="recording-time">{formatRecordingTime(recordingTime)}</Text>
-                  <Button className="stop-record-btn" onClick={handleStopRecording}>
-                    停止
-                  </Button>
-                </View>
-              ) : (
-                <View className="voice-prompt" onClick={handleStartRecording}>
-                  <Text className="voice-prompt-icon">🎙️</Text>
-                  <Text className="voice-prompt-text">点击开始录音</Text>
-                </View>
-              )}
-            </View>
-            <View className="input-mode-toggle" onClick={handleToggleInputMode}>
-              <Text className="toggle-icon">⌨️</Text>
-            </View>
-          </View>
         )}
 
-        <Button
-          className="submit-button"
-          onClick={handleSubmit}
-          disabled={isSubmitting || !question.trim()}
-        >
-          {isSubmitting ? '...' : '问一下'}
-        </Button>
+        {/* 只在文字输入模式且有输入内容时显示发送按钮 */}
+        {inputMode === 'text' && question.trim() && (
+          <Button
+            className="submit-button"
+            onClick={handleSubmit}
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? '...' : '发送'}
+          </Button>
+        )}
       </View>
     </View>
   )

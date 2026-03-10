@@ -1,0 +1,1225 @@
+import Taro from '@tarojs/taro'
+import { doubaoRealtimeService, type ASRResult as RealtimeASRResult, type TTSResult as RealtimeTTSResult, type ChatResult } from './doubao-realtime'
+
+/**
+ * 语音服务配置
+ */
+const VOICE_CONFIG = {
+  // 录音配置
+  record: {
+    duration: 30000,      // 最长录音时长（毫秒）
+    format: 'wav',        // 音频格式（wav 包含 PCM 数据，方便实时模式使用）
+    sampleRate: 16000,    // 采样率
+    numberOfChannels: 1,   // 声道数
+    encodeBitRate: 48000, // 编码码率
+    frameSize: 50         // 指定帧大小
+  },
+  // GLM-ASR 配置（备用）
+  glmAsr: {
+    baseUrl: 'https://open.bigmodel.cn/api/paas/v4/audio/transcriptions',
+    apiKey: process.env.GLM_API_KEY || '',
+    model: 'glm-asr-2512'
+  },
+  // 豆包级联模式配置
+  doubao: {
+    // ASR 配置（豆包语音识别）
+    asr: {
+      baseUrl: 'https://openspeech.bytedance.com/api/v3/auc/bigmodel/submit',
+      appId: process.env.DOUBAO_APP_ID || '',
+      accessKey: process.env.DOUBAO_ACCESS_KEY || '',
+      language: 'zh-CN',
+      format: 'mp3'
+    },
+    // LLM 配置（火山方舟）
+    llm: {
+      baseUrl: process.env.DOUBAO_API_ENDPOINT || 'https://ark.cn-beijing.volces.com/api/v3',
+      apiKey: process.env.DOUBAO_ACCESS_KEY || '',
+      model: 'doubao-pro-32k',
+      maxTokens: 1024,
+      temperature: 0.7
+    },
+    // TTS 配置（豆包语音合成）
+    tts: {
+      baseUrl: 'https://openspeech.bytedance.com/api/v3/tts',
+      appId: process.env.DOUBAO_APP_ID || '',
+      accessKey: process.env.DOUBAO_ACCESS_KEY || '',
+      voiceType: 'zh_female_qingxin',  // 清新女声（儿童友好）
+      speed: 1.0,
+      pitch: 1.0
+    }
+  },
+  // 当前使用的服务模式：'doubao-cascade' | 'glm-asr' | 'doubao-realtime'
+  mode: 'doubao-cascade' as const
+}
+
+/**
+ * 语音识别结果接口
+ */
+export interface ASRResult {
+  success: boolean
+  text: string
+  confidence?: number
+  errorMessage?: string
+  tempFilePath?: string  // 录音文件路径（实时模式使用）
+}
+
+/**
+ * 语音合成结果接口
+ */
+export interface TTSResult {
+  success: boolean
+  audioUrl?: string
+  duration?: number
+  errorMessage?: string
+}
+
+/**
+ * 播放状态接口
+ */
+export interface PlayState {
+  isPlaying: boolean
+  currentMessageId: string | null
+  progress: number
+  duration: number
+}
+
+/**
+ * 语音服务类
+ */
+class VoiceService {
+  private recorderManager: any = null
+  private innerAudio: any = null
+  private playState: PlayState = {
+    isPlaying: false,
+    currentMessageId: null,
+    progress: 0,
+    duration: 0
+  }
+  private playStateListeners: Array<(state: PlayState) => void> = []
+  private recorderInitialized = false
+  private startResolve: (() => void) | null = null
+  private startReject: ((error: any) => void) | null = null
+  private stopResolve: ((result: any) => void) | null = null
+  private cancelResolve: (() => void) | null = null
+
+  constructor() {
+    this.initRecorderManager()
+    this.initAudioPlayer()
+  }
+
+  /**
+   * 初始化录音管理器（只初始化一次）
+   */
+  private initRecorderManager() {
+    try {
+      // 如果已经初始化过，直接返回
+      if (this.recorderInitialized) {
+        console.log('录音管理器已初始化，跳过')
+        return
+      }
+
+      // 获取录音管理器实例
+      this.recorderManager = Taro.getRecorderManager()
+
+      // 监听录音开始
+      this.recorderManager.onStart(() => {
+        console.log('录音开始事件')
+        if (this.startResolve) {
+          this.startResolve()
+          this.startResolve = null
+        }
+      })
+
+      // 监听录音暂停
+      this.recorderManager.onPause(() => {
+        console.log('录音暂停事件')
+      })
+
+      // 监听录音停止
+      this.recorderManager.onStop((res: any) => {
+        console.log('录音停止事件:', res)
+        if (this.stopResolve) {
+          this.stopResolve(res)
+          this.stopResolve = null
+        }
+        if (this.cancelResolve) {
+          this.cancelResolve()
+          this.cancelResolve = null
+        }
+      })
+
+      // 监听录音错误
+      this.recorderManager.onError((err: any) => {
+        console.error('录音错误事件:', err)
+        if (this.startReject) {
+          this.startReject(err)
+          this.startReject = null
+        }
+        if (this.stopResolve) {
+          this.stopResolve(null)
+          this.stopResolve = null
+        }
+        if (this.cancelResolve) {
+          this.cancelResolve()
+          this.cancelResolve = null
+        }
+      })
+
+      // 监听录音帧数据（可用于波形显示）
+      if (this.recorderManager.onFrameRecorded) {
+        this.recorderManager.onFrameRecorded((res: any) => {
+          // res.frameBuffer 是录音帧数据
+          // 可以根据这些数据计算音量并显示波形
+          const volume = this.calculateVolume(res.frameBuffer)
+          this.onVolumeChanged(volume)
+        })
+      }
+
+      this.recorderInitialized = true
+      console.log('录音管理器初始化完成')
+    } catch (error) {
+      console.error('初始化录音管理器失败:', error)
+    }
+  }
+
+  /**
+   * 初始化音频播放器
+   */
+  private initAudioPlayer() {
+    try {
+      this.innerAudio = Taro.createInnerAudioContext()
+
+      // 监听音频播放事件
+      this.innerAudio.onPlay(() => {
+        console.log('开始播放')
+        this.updatePlayState({ isPlaying: true })
+      })
+
+      // 监听音频暂停事件
+      this.innerAudio.onPause(() => {
+        console.log('暂停播放')
+        this.updatePlayState({ isPlaying: false })
+      })
+
+      // 监听音频停止事件
+      this.innerAudio.onStop(() => {
+        console.log('停止播放')
+        this.updatePlayState({ isPlaying: false, progress: 0, currentMessageId: null })
+      })
+
+      // 监听音频自然播放结束事件
+      this.innerAudio.onEnded(() => {
+        console.log('播放结束')
+        this.updatePlayState({ isPlaying: false, progress: 0, currentMessageId: null })
+      })
+
+      // 监听音频播放进度更新
+      this.innerAudio.onTimeUpdate(() => {
+        const currentTime = this.innerAudio.currentTime
+        const duration = this.innerAudio.duration
+        const progress = duration > 0 ? currentTime / duration : 0
+        this.updatePlayState({
+          progress,
+          duration
+        })
+      })
+
+      // 监听音频播放错误事件
+      this.innerAudio.onError((err: any) => {
+        console.error('播放错误:', err)
+        this.updatePlayState({ isPlaying: false })
+      })
+    } catch (error) {
+      console.error('初始化音频播放器失败:', error)
+    }
+  }
+
+  /**
+   * 更新播放状态
+   */
+  private updatePlayState(updates: Partial<PlayState>) {
+    this.playState = { ...this.playState, ...updates }
+    this.playStateListeners.forEach(listener => listener(this.playState))
+  }
+
+  /**
+   * 计算音量（用于波形显示）
+   */
+  private calculateVolume(buffer: any): number {
+    // 简化版：实际使用时可以根据音频帧数据计算真实的音量
+    // 这里返回 0-1 之间的数值，表示音量大小
+    return Math.random() * 0.5 + 0.3
+  }
+
+  /**
+   * 音量变化回调（可外部覆盖）
+   */
+  protected onVolumeChanged(volume: number) {
+    // 默认不处理，外部可以覆盖此方法
+  }
+
+  /**
+   * 开始录音
+   * @param options 录音选项
+   * @returns Promise<void>
+   */
+  async startRecording(options?: Partial<typeof VOICE_CONFIG.record>): Promise<void> {
+    return new Promise((resolve, reject) => {
+      try {
+        console.log('=== voiceService.startRecording ===')
+
+        // 清除之前的 resolve/reject
+        this.startResolve = null
+        this.startReject = null
+        this.stopResolve = null
+        this.cancelResolve = null
+
+        // 保存 resolve/reject
+        this.startResolve = resolve
+        this.startReject = reject
+
+        // 获取配置
+        const config = { ...VOICE_CONFIG.record, ...options }
+        console.log('录音配置:', config)
+
+        // 直接调用 start，让录音管理器自己管理状态
+        console.log('调用 recorderManager.start()')
+        this.recorderManager.start(config)
+      } catch (error) {
+        console.error('startRecording 异常:', error)
+        reject(error)
+      }
+    })
+  }
+
+  /**
+   * 停止录音并识别
+   * @returns Promise<ASRResult> 语音识别结果
+   */
+  async stopRecording(): Promise<ASRResult & { tempFilePath?: string }> {
+    return new Promise((resolve, reject) => {
+      try {
+        console.log('=== voiceService.stopRecording ===')
+        console.log('当前模式:', VOICE_CONFIG.mode)
+
+        // 清除之前的回调
+        this.startResolve = null
+        this.startReject = null
+
+        // 保存 stop 的 resolve
+        this.stopResolve = async (res: any) => {
+          console.log('录音文件:', res.tempFilePath)
+          console.log('录音时长:', res.duration)
+          console.log('文件大小:', res.fileSize)
+
+          // 如果是实时模式，直接返回文件路径
+          if (VOICE_CONFIG.mode === 'doubao-realtime') {
+            console.log('实时模式：返回音频文件路径')
+            resolve({
+              success: true,
+              text: '',
+              tempFilePath: res.tempFilePath
+            })
+            return
+          }
+
+          // 否则进行语音识别
+          const result = await this.recognizeSpeech(res.tempFilePath, res.duration)
+
+          resolve(result)
+        }
+
+        this.cancelResolve = null
+
+        // 停止录音
+        this.recorderManager.stop()
+
+        // 设置超时，防止 stop 没有响应
+        setTimeout(() => {
+          if (this.stopResolve) {
+            console.warn('停止录音超时')
+            this.stopResolve = null
+            reject({ errMsg: 'stop timeout' })
+          }
+        }, 5000)
+      } catch (error) {
+        reject(error)
+      }
+    })
+  }
+
+  /**
+   * 取消录音（不进行识别）
+   * @returns Promise<void>
+   */
+  async cancelRecording(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      try {
+        console.log('=== voiceService.cancelRecording ===')
+
+        // 清除之前的回调
+        this.startResolve = null
+        this.startReject = null
+        this.stopResolve = null
+
+        // 保存 cancel 的 resolve
+        this.cancelResolve = () => {
+          console.log('录音已取消')
+          resolve()
+        }
+
+        // 停止录音
+        this.recorderManager.stop()
+
+        // 设置超时
+        setTimeout(() => {
+          if (this.cancelResolve) {
+            console.warn('取消录音超时')
+            this.cancelResolve = null
+            resolve()
+          }
+        }, 5000)
+      } catch (error) {
+        reject(error)
+      }
+    })
+  }
+
+  /**
+   * 切换语音服务模式
+   * @param mode 'doubao-cascade' | 'glm-asr' | 'doubao-realtime'
+   */
+  switchMode(mode: 'doubao-cascade' | 'glm-asr' | 'doubao-realtime'): void {
+    console.log('切换语音服务模式:', mode)
+    VOICE_CONFIG.mode = mode
+  }
+
+  /**
+   * 获取当前模式
+   * @returns 当前模式
+   */
+  getMode(): 'doubao-cascade' | 'glm-asr' | 'doubao-realtime' {
+    return VOICE_CONFIG.mode
+  }
+
+  /**
+   * 语音识别
+   * 根据配置使用 GLM-ASR 或 豆包 ASR 进行语音识别
+   * @param audioFilePath 音频文件路径
+   * @param duration 录音时长（毫秒）
+   * @returns Promise<ASRResult> 识别结果
+   */
+  private async recognizeSpeech(
+    audioFilePath: string,
+    duration: number
+  ): Promise<ASRResult> {
+    try {
+      console.log('=== 开始语音识别 ===')
+      console.log('音频文件:', audioFilePath)
+      console.log('录音时长:', duration, 'ms')
+      console.log('使用模式:', VOICE_CONFIG.mode)
+
+      // 根据配置选择 ASR 服务
+      if (VOICE_CONFIG.mode === 'doubao-cascade') {
+        return await this.doubaoASR(audioFilePath, duration)
+      } else {
+        return await this.glmASR(audioFilePath, duration)
+      }
+    } catch (error) {
+      console.error('语音识别失败:', error)
+      return {
+        success: false,
+        text: '',
+        errorMessage: error instanceof Error ? error.message : '语音识别失败'
+      }
+    }
+  }
+
+  /**
+   * GLM-ASR 语音识别（备用）
+   * @param audioFilePath 音频文件路径
+   * @param duration 录音时长（毫秒）
+   * @returns Promise<ASRResult> 识别结果
+   */
+  private async glmASR(
+    audioFilePath: string,
+    duration: number
+  ): Promise<ASRResult> {
+    try {
+      console.log('=== 开始 GLM-ASR 语音识别 ===')
+
+      // 检查 API Key 是否配置
+      const apiKey = VOICE_CONFIG.glmAsr.apiKey
+      if (!apiKey) {
+        console.error('GLM-ASR API Key 未配置')
+        return {
+          success: false,
+          text: '',
+          errorMessage: '请配置 GLM-ASR API Key'
+        }
+      }
+
+      // 使用 Taro.uploadFile 上传音频文件到 GLM-ASR API
+      const uploadResult = await new Promise<any>((resolve, reject) => {
+        Taro.uploadFile({
+          url: VOICE_CONFIG.glmAsr.baseUrl,
+          filePath: audioFilePath,
+          name: 'file',
+          formData: {
+            model: VOICE_CONFIG.glmAsr.model,
+            stream: 'false'
+          },
+          header: {
+            'Authorization': `Bearer ${apiKey}`
+          },
+          success: (res: any) => {
+            console.log('上传成功，状态码:', res.statusCode)
+            console.log('响应数据:', res.data)
+            resolve(res)
+          },
+          fail: (err: any) => {
+            console.error('上传失败:', err)
+            reject(err)
+          }
+        })
+      })
+
+      // 检查 HTTP 状态码
+      if (uploadResult.statusCode !== 200) {
+        console.error('GLM-ASR API 返回错误状态码:', uploadResult.statusCode)
+        return {
+          success: false,
+          text: '',
+          errorMessage: `API 错误: ${uploadResult.statusCode}`
+        }
+      }
+
+      // 解析响应数据
+      let responseText = uploadResult.data
+      if (typeof responseText === 'string') {
+        try {
+          responseText = JSON.parse(responseText)
+        } catch (e) {
+          console.error('解析响应数据失败:', e)
+          return {
+            success: false,
+            text: '',
+            errorMessage: '解析响应数据失败'
+          }
+        }
+      }
+
+      // 检查 API 是否返回错误
+      if (responseText.error) {
+        console.error('GLM-ASR API 返回错误:', responseText.error)
+        return {
+          success: false,
+          text: '',
+          errorMessage: responseText.error.message || '语音识别失败'
+        }
+      }
+
+      // 提取识别结果
+      const recognizedText = responseText.text || ''
+      console.log('=== GLM-ASR 识别结果:', recognizedText, '===')
+
+      return {
+        success: true,
+        text: recognizedText,
+        confidence: 0.95
+      }
+    } catch (error) {
+      console.error('GLM-ASR 语音识别失败:', error)
+      return {
+        success: false,
+        text: '',
+        errorMessage: error instanceof Error ? error.message : '语音识别失败'
+      }
+    }
+  }
+
+  /**
+   * 语音合成
+   * @param text 要合成的文本
+   * @returns Promise<TTSResult> 合成结果
+   */
+  async synthesizeSpeech(text: string): Promise<TTSResult> {
+    try {
+      console.log('=== 开始语音合成 ===')
+      console.log('文本:', text)
+
+      // 如果使用豆包级联模式，调用豆包 TTS
+      if (VOICE_CONFIG.mode === 'doubao-cascade') {
+        return await this.doubaoTTS(text)
+      }
+
+      // 模拟网络请求延迟
+      await this.delay(500)
+
+      // 返回模拟的合成结果
+      const mockAudioUrl = ''
+      const mockDuration = Math.ceil(text.length * 200) // 估算时长
+
+      console.log('=== 合成完成，时长:', mockDuration, 'ms', '===')
+
+      return {
+        success: true,
+        audioUrl: mockAudioUrl,
+        duration: mockDuration
+      }
+    } catch (error) {
+      console.error('语音合成失败:', error)
+      return {
+        success: false,
+        errorMessage: '语音合成失败'
+      }
+    }
+  }
+
+  /**
+   * 豆包 ASR - 语音识别（文件识别 API）
+   * @param audioFilePath 音频文件路径
+   * @param duration 录音时长（毫秒）
+   * @returns Promise<ASRResult> 识别结果
+   */
+  private async doubaoASR(audioFilePath: string, duration: number): Promise<ASRResult> {
+    try {
+      console.log('=== 开始豆包 ASR 语音识别 ===')
+      console.log('音频文件:', audioFilePath)
+      console.log('录音时长:', duration, 'ms')
+
+      const config = VOICE_CONFIG.doubao.asr
+
+      // 检查配置
+      if (!config.appId || !config.accessKey) {
+        console.error('豆包 ASR 配置不完整')
+        return {
+          success: false,
+          text: '',
+          errorMessage: '请配置豆包 App ID 和 Access Key'
+        }
+      }
+
+      // 第一步：提交识别任务
+      // App ID 可能是 Base64 编码格式，直接使用
+      const appId = config.appId
+
+      console.log('=== 豆包 ASR 请求信息 ===')
+      console.log('API URL:', config.baseUrl)
+      console.log('App ID:', appId)
+      console.log('Access Key (前10位):', config.accessKey.substring(0, 10) + '...')
+
+      const formData = {
+        app: JSON.stringify({
+          appid: appId,
+          token: config.accessKey,
+          cluster: 'volc_asr_common'
+        }),
+        user: JSON.stringify({
+          uid: 'user_001'
+        }),
+        audio: JSON.stringify({
+          format: 'mp3',
+          rate: 16000,
+          language: 'zh'
+        }),
+        request: JSON.stringify({
+          reqid: `req_${Date.now()}`,
+          nbest: 1
+        })
+      }
+      console.log('FormData:', formData)
+
+      const submitResult = await new Promise<any>((resolve, reject) => {
+        Taro.uploadFile({
+          url: config.baseUrl,
+          filePath: audioFilePath,
+          name: 'file',
+          formData: formData,
+          header: {
+            'Authorization': `Bearer ${config.accessKey}`
+          },
+          success: (res: any) => {
+            console.log('豆包 ASR 提交成功，状态码:', res.statusCode)
+            console.log('响应数据:', res.data)
+            resolve(res)
+          },
+          fail: (err: any) => {
+            console.error('豆包 ASR 提交失败:', err)
+            reject(err)
+          }
+        })
+      })
+
+      // 检查 HTTP 状态码
+      if (submitResult.statusCode !== 200) {
+        console.error('豆包 ASR API 返回错误状态码:', submitResult.statusCode)
+        console.error('响应数据:', submitResult.data)
+        return {
+          success: false,
+          text: '',
+          errorMessage: `API 错误: ${submitResult.statusCode}`
+        }
+      }
+
+      // 解析响应数据
+      let responseText = submitResult.data
+      if (typeof responseText === 'string') {
+        try {
+          responseText = JSON.parse(responseText)
+        } catch (e) {
+          console.error('解析响应数据失败:', e)
+          return {
+            success: false,
+            text: '',
+            errorMessage: '解析响应数据失败'
+          }
+        }
+      }
+
+      // 检查 API 是否返回错误
+      if (responseText.code !== 0 && responseText.code !== '0') {
+        console.error('豆包 ASR API 返回错误:', responseText)
+        return {
+          success: false,
+          text: '',
+          errorMessage: responseText.message || responseText.msg || '语音识别失败'
+        }
+      }
+
+      // 提取识别结果（同步模式直接返回结果）
+      const recognizedText = responseText.result?.text || responseText.text || ''
+      console.log('=== 豆包 ASR 识别结果:', recognizedText, '===')
+
+      return {
+        success: true,
+        text: recognizedText,
+        confidence: 0.95
+      }
+    } catch (error) {
+      console.error('豆包 ASR 语音识别失败:', error)
+      return {
+        success: false,
+        text: '',
+        errorMessage: error instanceof Error ? error.message : '语音识别失败'
+      }
+    }
+  }
+
+  /**
+   * 豆包 LLM - 文本生成
+   * @param prompt 用户问题
+   * @returns Promise<string> 生成结果
+   */
+  private async doubaoLLM(prompt: string): Promise<string> {
+    try {
+      console.log('=== 开始豆包 LLM 文本生成 ===')
+      console.log('问题:', prompt)
+
+      const config = VOICE_CONFIG.doubao.llm
+
+      // 检查配置
+      if (!config.apiKey) {
+        console.error('豆包 LLM API Key 未配置')
+        throw new Error('请配置豆包 Access Key')
+      }
+
+      // 构建儿童友好的系统提示
+      const systemMessage = {
+        role: 'system',
+        content: '你是一个儿童友好的问答助手。请用简单、生动、有趣的语言回答小朋友的问题，语气温柔亲切。回答要适合3-8岁的儿童理解，避免复杂的专业术语。如果遇到不适合儿童的内容，请温柔地引导他们问其他问题。'
+      }
+
+      // 调用豆包 LLM API（OpenAI 兼容）
+      const response = await new Promise<any>((resolve, reject) => {
+        Taro.request({
+          url: `${config.baseUrl}/chat/completions`,
+          method: 'POST',
+          header: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${config.apiKey}`
+          },
+          data: {
+            model: config.model,
+            messages: [
+              systemMessage,
+              { role: 'user', content: prompt }
+            ],
+            max_tokens: config.maxTokens,
+            temperature: config.temperature
+          },
+          success: (res: any) => {
+            console.log('豆包 LLM 响应:', res.data)
+            resolve(res.data)
+          },
+          fail: (err: any) => {
+            console.error('豆包 LLM 请求失败:', err)
+            reject(err)
+          }
+        })
+      })
+
+      // 提取生成结果
+      const result = response.choices?.[0]?.message?.content || ''
+      console.log('=== 豆包 LLM 生成结果:', result, '===')
+
+      return result
+    } catch (error) {
+      console.error('豆包 LLM 文本生成失败:', error)
+      throw error
+    }
+  }
+
+  /**
+   * 豆包 TTS - 语音合成
+   * @param text 要合成的文本
+   * @returns Promise<TTSResult> 合成结果
+   */
+  private async doubaoTTS(text: string): Promise<TTSResult> {
+    try {
+      console.log('=== 开始豆包 TTS 语音合成 ===')
+      console.log('文本:', text)
+
+      const config = VOICE_CONFIG.doubao.tts
+
+      // 检查配置
+      if (!config.appId || !config.accessKey) {
+        console.error('豆包 TTS 配置不完整')
+        return {
+          success: false,
+          errorMessage: '请配置豆包 App ID 和 Access Key'
+        }
+      }
+
+      // 调用豆包 TTS API（HTTP 非流式接口）
+      const response = await new Promise<any>((resolve, reject) => {
+        Taro.request({
+          url: `${config.baseUrl}/v1/tts`,
+          method: 'POST',
+          header: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${config.accessKey}`
+          },
+          data: {
+            app: {
+              appid: config.appId,
+              token: config.accessKey,
+              cluster: 'volc_tts_common'  // 公共集群
+            },
+            user: {
+              uid: 'user_001'  // 用户标识
+            },
+            audio: {
+              voice_type: config.voiceType,
+              encoding: 'mp3',
+              speed_ratio: config.speed,
+              volume_ratio: 1.0,
+              pitch_ratio: config.pitch
+            },
+            request: {
+              reqid: `req_${Date.now()}`,
+              text: text,
+              text_type: 'plain',
+              operation: 'submit'
+            }
+          },
+          success: (res: any) => {
+            console.log('豆包 TTS 响应，状态码:', res.statusCode)
+            console.log('响应数据:', res.data)
+            if (res.statusCode === 200) {
+              resolve(res)
+            } else {
+              reject({ statusCode: res.statusCode, data: res.data })
+            }
+          },
+          fail: (err: any) => {
+            console.error('豆包 TTS 请求失败:', err)
+            reject(err)
+          }
+        })
+      })
+
+      // 解析响应数据
+      const result = response.data
+
+      // 检查是否返回了错误
+      if (result.code !== 0 && result.code !== '0') {
+        console.error('豆包 TTS 返回错误:', result)
+        return {
+          success: false,
+          errorMessage: result.message || result.msg || '语音合成失败'
+        }
+      }
+
+      // 获取音频 URL（API 返回音频文件的 URL）
+      const audioUrl = result.data?.url || result.url || ''
+
+      if (!audioUrl) {
+        console.error('豆包 TTS 未返回音频 URL')
+        return {
+          success: false,
+          errorMessage: '语音合成失败：未返回音频 URL'
+        }
+      }
+
+      console.log('=== 豆包 TTS 合成完成，音频 URL:', audioUrl, '===')
+
+      return {
+        success: true,
+        audioUrl: audioUrl,
+        duration: Math.ceil(text.length * 200) // 估算时长
+      }
+    } catch (error) {
+      console.error('豆包 TTS 语音合成失败:', error)
+      return {
+        success: false,
+        errorMessage: error instanceof Error ? error.message : '语音合成失败'
+      }
+    }
+  }
+
+  /**
+   * 豆包级联模式 - 完整的语音对话流程
+   * @param audioFilePath 音频文件路径
+   * @param duration 录音时长（毫秒）
+   * @returns Promise<{ text: string, audioUrl?: string }> 识别结果和合成音频
+   */
+  async doubaoCascade(audioFilePath: string, duration: number): Promise<{ text: string, audioUrl?: string }> {
+    try {
+      // 第一步：语音识别 (ASR)
+      const asrResult = await this.doubaoASR(audioFilePath, duration)
+      if (!asrResult.success || !asrResult.text) {
+        throw new Error(asrResult.errorMessage || '语音识别失败')
+      }
+
+      const recognizedText = asrResult.text
+
+      // 第二步：文本生成 (LLM)
+      const answer = await this.doubaoLLM(recognizedText)
+
+      // 第三步：语音合成 (TTS)
+      const ttsResult = await this.doubaoTTS(answer)
+
+      if (!ttsResult.success) {
+        throw new Error(ttsResult.errorMessage || '语音合成失败')
+      }
+
+      return {
+        text: answer,
+        audioUrl: ttsResult.audioUrl
+      }
+    } catch (error) {
+      console.error('豆包级联模式失败:', error)
+      throw error
+    }
+  }
+
+  /**
+   * 生成签名（用于豆包 ASR 认证）
+   * @param appId App ID
+   * @param accessKey Access Key
+   * @param timestamp 时间戳
+   * @returns Promise<string> 签名
+   */
+  private async generateSignature(appId: string, accessKey: string, timestamp: string): Promise<string> {
+    // 简化版签名生成，实际应根据豆包 API 文档实现
+    // 这里返回 base64(appId + accessKey + timestamp)
+    const str = appId + accessKey + timestamp
+    const signature = Taro.base64ToArrayBuffer?.(str) || btoa(str)
+    return typeof signature === 'string' ? signature : String(signature)
+  }
+
+  /**
+   * 保存 base64 音频数据为临时文件
+   * @param base64Data base64 音频数据
+   * @returns Promise<string> 临时文件路径
+   */
+  private async saveBase64Audio(base64Data: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const tempFilePath = `${Taro.env.USER_DATA_PATH}/tts_${Date.now()}.mp3`
+      const fs = Taro.getFileSystemManager()
+
+      fs.writeFile({
+        filePath: tempFilePath,
+        data: base64Data,
+        encoding: 'base64',
+        success: () => {
+          console.log('音频文件保存成功:', tempFilePath)
+          resolve(tempFilePath)
+        },
+        fail: (err) => {
+          console.error('保存音频文件失败:', err)
+          reject(err)
+        }
+      })
+    })
+  }
+
+  /**
+   * 播放语音
+   * @param audioUrl 音频 URL
+   * @param messageId 消息 ID（用于跟踪播放状态）
+   */
+  play(audioUrl: string, messageId?: string): void {
+    try {
+      // 停止当前播放
+      if (this.innerAudio) {
+        this.innerAudio.stop()
+      }
+
+      // 设置音频源
+      this.innerAudio.src = audioUrl
+
+      // 设置当前消息 ID
+      this.updatePlayState({
+        currentMessageId: messageId || null,
+        progress: 0
+      })
+
+      // 开始播放
+      this.innerAudio.play()
+    } catch (error) {
+      console.error('播放失败:', error)
+    }
+  }
+
+  /**
+   * 暂停播放
+   */
+  pause(): void {
+    try {
+      if (this.innerAudio && this.playState.isPlaying) {
+        this.innerAudio.pause()
+      }
+    } catch (error) {
+      console.error('暂停失败:', error)
+    }
+  }
+
+  /**
+   * 恢复播放
+   */
+  resume(): void {
+    try {
+      if (this.innerAudio && !this.playState.isPlaying) {
+        this.innerAudio.play()
+      }
+    } catch (error) {
+      console.error('恢复播放失败:', error)
+    }
+  }
+
+  /**
+   * 停止播放
+   */
+  stop(): void {
+    try {
+      if (this.innerAudio) {
+        this.innerAudio.stop()
+        this.updatePlayState({
+          isPlaying: false,
+          progress: 0,
+          currentMessageId: null
+        })
+      }
+    } catch (error) {
+      console.error('停止播放失败:', error)
+    }
+  }
+
+  /**
+   * 获取当前播放状态
+   */
+  getPlayState(): PlayState {
+    return { ...this.playState }
+  }
+
+  /**
+   * 订阅播放状态变化
+   */
+  onPlayStateChange(listener: (state: PlayState) => void): () => void {
+    this.playStateListeners.push(listener)
+    return () => {
+      const index = this.playStateListeners.indexOf(listener)
+      if (index > -1) {
+        this.playStateListeners.splice(index, 1)
+      }
+    }
+  }
+
+  /**
+   * 播放文本（自动合成并播放）
+   * @param text 要播放的文本
+   * @param messageId 消息 ID
+   */
+  async playText(text: string, messageId?: string): Promise<void> {
+    try {
+      // 1. 合成语音
+      const result = await this.synthesizeSpeech(text)
+
+      if (!result.success || !result.audioUrl) {
+        console.error('语音合成失败:', result.errorMessage)
+        throw new Error(result.errorMessage || '语音合成失败')
+      }
+
+      // 2. 播放语音
+      this.play(result.audioUrl, messageId)
+    } catch (error) {
+      console.error('播放文本失败:', error)
+      throw error
+    }
+  }
+
+  /**
+   * 工具方法：延迟
+   */
+  private delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms))
+  }
+
+  /**
+   * 连接豆包实时语音服务
+   * @returns Promise<void>
+   */
+  async connectRealtimeService(): Promise<void> {
+    console.log('=== 连接豆包实时语音服务 ===')
+    return await doubaoRealtimeService.connect()
+  }
+
+  /**
+   * 断开豆包实时语音服务
+   */
+  disconnectRealtimeService(): void {
+    console.log('=== 断开豆包实时语音服务 ===')
+    doubaoRealtimeService.disconnect()
+  }
+
+  /**
+   * 开始实时语音会话
+   */
+  startRealtimeSession(): void {
+    console.log('=== 开始实时语音会话 ===')
+    doubaoRealtimeService.startSession()
+  }
+
+  /**
+   * 结束实时语音会话
+   */
+  endRealtimeSession(): void {
+    console.log('=== 结束实时语音会话 ===')
+    doubaoRealtimeService.endSession()
+  }
+
+  /**
+   * 发送音频数据到实时服务
+   * @param audioFilePath 音频文件路径
+   */
+  async sendAudioToRealtime(audioFilePath: string): Promise<void> {
+    try {
+      console.log('=== 发送音频到实时服务 ===')
+      console.log('音频文件:', audioFilePath)
+
+      // 读取音频文件
+      const audioData = await new Promise<ArrayBuffer>((resolve, reject) => {
+        Taro.getFileSystemManager().readFile({
+          filePath: audioFilePath,
+          success: (res: any) => {
+            resolve(res.data)
+          },
+          fail: (err: any) => {
+            console.error('读取音频文件失败:', err)
+            reject(err)
+          }
+        })
+      })
+
+      // 如果是 WAV 文件，提取 PCM 数据（WAV 有 44 字节的头部）
+      const pcmData = this.extractPCMFromWAV(audioData)
+
+      console.log('发送 PCM 数据，长度:', pcmData.byteLength)
+
+      // 发送到实时服务
+      doubaoRealtimeService.sendAudio(pcmData)
+    } catch (error) {
+      console.error('发送音频到实时服务失败:', error)
+      throw error
+    }
+  }
+
+  /**
+   * 从 WAV 文件中提取 PCM 数据
+   * WAV 文件格式：
+   * - 前 44 字节是 WAV 头部
+   * - 44 字节之后是 PCM 数据
+   */
+  private extractPCMFromWAV(wavData: ArrayBuffer): ArrayBuffer {
+    // WAV 头部是 44 字节，PCM 数据从第 44 字节开始
+    const headerSize = 44
+
+    if (wavData.byteLength <= headerSize) {
+      console.warn('WAV 文件过小，可能是无效的文件')
+      return wavData
+    }
+
+    // 返回 PCM 数据部分
+    return wavData.slice(headerSize)
+  }
+
+  /**
+   * 设置实时语音服务回调
+   */
+  setRealtimeCallbacks(callbacks: {
+    onASRResult?: (result: RealtimeASRResult) => void
+    onChatResponse?: (result: ChatResult) => void
+    onTTSResult?: (result: RealtimeTTSResult) => void
+    onError?: (error: string) => void
+  }): void {
+    doubaoRealtimeService.setCallbacks(callbacks)
+  }
+
+  /**
+   * 获取实时服务状态
+   */
+  getRealtimeState(): string {
+    return doubaoRealtimeService.getState()
+  }
+
+  /**
+   * 销毁服务，释放资源
+   */
+  destroy() {
+    try {
+      // 停止录音
+      if (this.recorderManager) {
+        this.recorderManager.stop()
+      }
+
+      // 停止播放
+      if (this.innerAudio) {
+        this.innerAudio.stop()
+        this.innerAudio.destroy()
+      }
+
+      // 清理监听器
+      this.playStateListeners = []
+    } catch (error) {
+      console.error('销毁语音服务失败:', error)
+    }
+  }
+}
+
+// 导出单例
+export const voiceService = new VoiceService()
+
+// 初始化实时语音服务配置（使用 defineConstants 替换后的环境变量）
+if (typeof process !== 'undefined' && process.env.DOUBAO_REALTIME_APP_ID) {
+  doubaoRealtimeService.setConfig({
+    appId: process.env.DOUBAO_REALTIME_APP_ID,
+    accessKey: process.env.DOUBAO_REALTIME_ACCESS_KEY,
+    resourceId: process.env.DOUBAO_REALTIME_RESOURCE_ID || 'volc.speech.dialog',
+    appKey: process.env.DOUBAO_REALTIME_APP_KEY || 'PlgvMymc7f3tQnJ6'
+  })
+}
+
+// 导出配置
+export { VOICE_CONFIG }

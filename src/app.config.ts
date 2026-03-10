@@ -5,10 +5,15 @@ export default {
     'pages/test/index'
   ],
   window: {
-    backgroundTextStyle: 'light',
-    navigationBarBackgroundColor: '#fff',
+    backgroundTextStyle: 'dark',
+    navigationBarBackgroundColor: '#f8f9fa',
     navigationBarTitleText: '好奇宝宝问答',
     navigationBarTextStyle: 'black',
-    backgroundColor: '#ffeef2'
+    backgroundColor: '#f8f9fa'
+  },
+  permission: {
+    'scope.record': {
+      desc: '用于录音和语音识别'
+    }
   }
 }
