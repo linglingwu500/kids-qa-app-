@@ -2,13 +2,34 @@ import Taro from '@tarojs/taro'
 import { doubaoRealtimeService, type ASRResult as RealtimeASRResult, type TTSResult as RealtimeTTSResult, type ChatResult } from './doubao-realtime'
 
 /**
+ * 辅助函数：解析 Taro 环境变量（Taro defineConstants 会替换为 JSON 字符串）
+ */
+const parseEnv = (value: any): string => {
+  // Taro defineConstants 会将值替换为 JSON.stringify() 的结果
+  // 例如：JSON.stringify("6497768638") => "\"6497768638\""
+  // 所以运行时 value 就是 "\"6497768638\""（带引号的字符串）
+  // 我们需要解析它以得到真实的值 "6497768638"
+  if (typeof value === 'string' && value.startsWith('"') && value.endsWith('"')) {
+    try {
+      // 尝试解析 JSON 字符串
+      const parsed = JSON.parse(value)
+      return typeof parsed === 'string' ? parsed : value
+    } catch (e) {
+      // 如果解析失败，尝试去掉首尾引号
+      return value.slice(1, -1)
+    }
+  }
+  return String(value)
+}
+
+/**
  * 语音服务配置
  */
 const VOICE_CONFIG = {
   // 录音配置
   record: {
     duration: 30000,      // 最长录音时长（毫秒）
-    format: 'wav',        // 音频格式（wav 包含 PCM 数据，方便实时模式使用）
+    format: 'mp3',        // 音频格式：mp3（微信小程序实际输出格式）
     sampleRate: 16000,    // 采样率
     numberOfChannels: 1,   // 声道数
     encodeBitRate: 48000, // 编码码率
@@ -17,33 +38,34 @@ const VOICE_CONFIG = {
   // GLM-ASR 配置（备用）
   glmAsr: {
     baseUrl: 'https://open.bigmodel.cn/api/paas/v4/audio/transcriptions',
-    apiKey: process.env.GLM_API_KEY || '',
+    apiKey: parseEnv(process.env.GLM_API_KEY || ''),
     model: 'glm-asr-2512'
   },
   // 豆包级联模式配置
   doubao: {
     // ASR 配置（豆包语音识别）
     asr: {
-      baseUrl: 'https://openspeech.bytedance.com/api/v3/auc/bigmodel/submit',
-      appId: process.env.DOUBAO_APP_ID || '',
-      accessKey: process.env.DOUBAO_ACCESS_KEY || '',
+      baseUrl: 'https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash',
+      appId: parseEnv(process.env.DOUBAO_APP_ID || ''),
+      accessKey: parseEnv(process.env.DOUBAO_ACCESS_KEY || ''),
       language: 'zh-CN',
-      format: 'mp3'
+      format: 'mp3'  // 与录音格式保持一致
     },
     // LLM 配置（火山方舟）
     llm: {
-      baseUrl: process.env.DOUBAO_API_ENDPOINT || 'https://ark.cn-beijing.volces.com/api/v3',
-      apiKey: process.env.DOUBAO_ACCESS_KEY || '',
+      baseUrl: parseEnv(process.env.DOUBAO_API_ENDPOINT || 'https://ark.cn-beijing.volces.com/api/v3'),
+      apiKey: parseEnv(process.env.DOUBAO_ACCESS_KEY || ''),
       model: 'doubao-pro-32k',
       maxTokens: 1024,
       temperature: 0.7
     },
     // TTS 配置（豆包语音合成）
     tts: {
-      baseUrl: 'https://openspeech.bytedance.com/api/v3/tts',
-      appId: process.env.DOUBAO_APP_ID || '',
-      accessKey: process.env.DOUBAO_ACCESS_KEY || '',
-      voiceType: 'zh_female_qingxin',  // 清新女声（儿童友好）
+      baseUrl: 'https://openspeech.bytedance.com/api/v1',
+      appId: parseEnv(process.env.DOUBAO_APP_ID || ''),
+      accessKey: parseEnv(process.env.DOUBAO_ACCESS_KEY || ''),
+      appKey: parseEnv(process.env.DOUBAO_SECRET_KEY || ''),  // TTS 需要使用 Secret Key 作为 App Key
+      voiceType: 'BV001_streaming',  // 通用女声（儿童友好）
       speed: 1.0,
       pitch: 1.0
     }
@@ -600,47 +622,83 @@ class VoiceService {
         }
       }
 
-      // 第一步：提交识别任务
-      // App ID 可能是 Base64 编码格式，直接使用
+      // 使用极速版 API 格式
       const appId = config.appId
+      const resourceId = 'volc.bigasr.auc_turbo'
 
-      console.log('=== 豆包 ASR 请求信息 ===')
-      console.log('API URL:', config.baseUrl)
-      console.log('App ID:', appId)
-      console.log('Access Key (前10位):', config.accessKey.substring(0, 10) + '...')
-
-      const formData = {
-        app: JSON.stringify({
-          appid: appId,
-          token: config.accessKey,
-          cluster: 'volc_asr_common'
-        }),
-        user: JSON.stringify({
-          uid: 'user_001'
-        }),
-        audio: JSON.stringify({
-          format: 'mp3',
-          rate: 16000,
-          language: 'zh'
-        }),
-        request: JSON.stringify({
-          reqid: `req_${Date.now()}`,
-          nbest: 1
+      // 生成 UUID
+      const generateUUID = () => {
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+          const r = Math.random() * 16 | 0
+          const v = c === 'x' ? r : (r & 0x3 | 0x8)
+          return v.toString(16)
         })
       }
-      console.log('FormData:', formData)
+
+      console.log('=== 豆包 ASR 极速版请求信息 ===')
+      console.log('API URL:', config.baseUrl)
+      console.log('config.appId 原始值:', config.appId)
+      console.log('config.appId 类型:', typeof config.appId)
+      console.log('config.appId 长度:', config.appId?.length)
+      console.log('App ID:', appId)
+      console.log('Access Key (前10位):', config.accessKey.substring(0, 10) + '...')
+      console.log('Resource ID:', resourceId)
+      console.log('音频文件路径:', audioFilePath)
+
+      // 读取音频文件并转换为 base64
+      const readFileBase64 = (): Promise<string> => {
+        return new Promise((resolve, reject) => {
+          Taro.getFileSystemManager().readFile({
+            filePath: audioFilePath,
+            encoding: 'base64',
+            success: (res: any) => {
+              console.log('音频文件读取成功，大小:', res.data.length, '字符')
+              resolve(res.data)
+            },
+            fail: (err: any) => {
+              console.error('读取音频文件失败:', err)
+              reject(err)
+            }
+          })
+        })
+      }
+
+      const audioBase64 = await readFileBase64()
+
+      // 构建请求体
+      const requestBody = {
+        user: {
+          uid: appId
+        },
+        audio: {
+          data: audioBase64
+        },
+        request: {
+          model_name: 'bigmodel'
+        }
+      }
+
+      console.log('请求体:', JSON.stringify(requestBody, null, 2))
+
+      // 生成请求 ID
+      const requestId = generateUUID()
 
       const submitResult = await new Promise<any>((resolve, reject) => {
-        Taro.uploadFile({
+        Taro.request({
           url: config.baseUrl,
-          filePath: audioFilePath,
-          name: 'file',
-          formData: formData,
+          method: 'POST',
           header: {
-            'Authorization': `Bearer ${config.accessKey}`
+            'Content-Type': 'application/json',
+            'X-Api-App-Key': appId,
+            'X-Api-Access-Key': config.accessKey,
+            'X-Api-Resource-Id': resourceId,
+            'X-Api-Request-Id': requestId,
+            'X-Api-Sequence': '-1'
           },
+          data: requestBody,
           success: (res: any) => {
-            console.log('豆包 ASR 提交成功，状态码:', res.statusCode)
+            console.log('豆包 ASR 提交成功，HTTP状态码:', res.statusCode)
+            console.log('响应头:', res.header)
             console.log('响应数据:', res.data)
             resolve(res)
           },
@@ -654,41 +712,35 @@ class VoiceService {
       // 检查 HTTP 状态码
       if (submitResult.statusCode !== 200) {
         console.error('豆包 ASR API 返回错误状态码:', submitResult.statusCode)
+        console.error('响应头:', submitResult.header)
         console.error('响应数据:', submitResult.data)
         return {
           success: false,
           text: '',
-          errorMessage: `API 错误: ${submitResult.statusCode}`
+          errorMessage: `HTTP 错误: ${submitResult.statusCode}`
+        }
+      }
+
+      // 检查 API 状态码（从响应头中获取）
+      const apiStatusCode = submitResult.header['X-Api-Status-Code'] || submitResult.header['x-api-status-code']
+      console.log('API 状态码:', apiStatusCode)
+
+      if (apiStatusCode !== '20000000') {
+        const apiMessage = submitResult.header['X-Api-Message'] || submitResult.header['x-api-message']
+        console.error('豆包 ASR API 返回错误，状态码:', apiStatusCode)
+        console.error('错误信息:', apiMessage)
+        return {
+          success: false,
+          text: '',
+          errorMessage: `API 错误: ${apiStatusCode} - ${apiMessage || '未知错误'}`
         }
       }
 
       // 解析响应数据
-      let responseText = submitResult.data
-      if (typeof responseText === 'string') {
-        try {
-          responseText = JSON.parse(responseText)
-        } catch (e) {
-          console.error('解析响应数据失败:', e)
-          return {
-            success: false,
-            text: '',
-            errorMessage: '解析响应数据失败'
-          }
-        }
-      }
+      const responseText = submitResult.data
 
-      // 检查 API 是否返回错误
-      if (responseText.code !== 0 && responseText.code !== '0') {
-        console.error('豆包 ASR API 返回错误:', responseText)
-        return {
-          success: false,
-          text: '',
-          errorMessage: responseText.message || responseText.msg || '语音识别失败'
-        }
-      }
-
-      // 提取识别结果（同步模式直接返回结果）
-      const recognizedText = responseText.result?.text || responseText.text || ''
+      // 提取识别结果
+      const recognizedText = responseText.result?.text || ''
       console.log('=== 豆包 ASR 识别结果:', recognizedText, '===')
 
       return {
@@ -791,36 +843,76 @@ class VoiceService {
         }
       }
 
+      // 生成请求 ID
+      const generateUUID = () => {
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+          const r = Math.random() * 16 | 0
+          const v = c === 'x' ? r : (r & 0x3 | 0x8)
+          return v.toString(16)
+        })
+      }
+      const requestId = generateUUID()
+
       // 调用豆包 TTS API（HTTP 非流式接口）
+      const fullUrl = `${config.baseUrl}/tts`
+      console.log('=== TTS 完整 URL:', fullUrl, '===')
+      console.log('TTS baseUrl:', config.baseUrl)
+
+      const requestData = {
+        app: {
+          appid: config.appId,
+          token: config.accessKey,
+          cluster: 'volcano_tts'  // 内置音色使用 volcano_tts 集群
+        },
+        user: {
+          uid: 'user_001'  // 用户标识
+        },
+        audio: {
+          voice_type: config.voiceType,
+          encoding: 'pcm',  // 使用 pcm 格式（默认值）
+          speed_ratio: config.speed,
+          volume_ratio: 1.0,
+          pitch_ratio: config.pitch
+        },
+        request: {
+          reqid: requestId,  // 使用 UUID
+          text: text,
+          text_type: 'plain',
+          operation: 'query'  // query 模式：HTTP 非流式合成
+        }
+      }
+      console.log('=== TTS 请求参数 ===')
+      console.log(JSON.stringify(requestData, null, 2))
+
       const response = await new Promise<any>((resolve, reject) => {
         Taro.request({
-          url: `${config.baseUrl}/v1/tts`,
+          url: fullUrl,
           method: 'POST',
           header: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${config.accessKey}`
+            'Authorization': `Bearer;${config.accessKey}`  // 官方文档推荐格式：Bearer;{token}
           },
           data: {
             app: {
               appid: config.appId,
               token: config.accessKey,
-              cluster: 'volc_tts_common'  // 公共集群
+              cluster: 'volcano_tts'  // 内置音色使用 volcano_tts 集群
             },
             user: {
               uid: 'user_001'  // 用户标识
             },
             audio: {
               voice_type: config.voiceType,
-              encoding: 'mp3',
+              encoding: 'pcm',  // 使用 pcm 格式（默认值）
               speed_ratio: config.speed,
               volume_ratio: 1.0,
               pitch_ratio: config.pitch
             },
             request: {
-              reqid: `req_${Date.now()}`,
+              reqid: requestId,  // 使用 UUID
               text: text,
               text_type: 'plain',
-              operation: 'submit'
+              operation: 'query'  // query 模式：HTTP 非流式合成
             }
           },
           success: (res: any) => {
@@ -837,13 +929,17 @@ class VoiceService {
             reject(err)
           }
         })
+
+        console.log('=== TTS 请求头 ===')
+        console.log('Authorization:', `Bearer;${config.accessKey}`)
       })
 
       // 解析响应数据
       const result = response.data
 
       // 检查是否返回了错误
-      if (result.code !== 0 && result.code !== '0') {
+      // VolcEngine TTS 返回 code: 3000 表示成功，code: 3001 表示失败
+      if (result.code === 3001) {
         console.error('豆包 TTS 返回错误:', result)
         return {
           success: false,
@@ -851,23 +947,62 @@ class VoiceService {
         }
       }
 
-      // 获取音频 URL（API 返回音频文件的 URL）
-      const audioUrl = result.data?.url || result.url || ''
+      // 获取 base64 音频数据（API 返回 base64 编码的音频）
+      const base64Audio = result.data || ''
 
-      if (!audioUrl) {
-        console.error('豆包 TTS 未返回音频 URL')
+      if (!base64Audio) {
+        console.error('豆包 TTS 未返回音频数据')
+        console.error('完整响应:', result)
         return {
           success: false,
-          errorMessage: '语音合成失败：未返回音频 URL'
+          errorMessage: '语音合成失败：未返回音频数据'
         }
       }
 
-      console.log('=== 豆包 TTS 合成完成，音频 URL:', audioUrl, '===')
+      console.log('=== 豆包 TTS 合成完成，收到 base64 数据，长度:', base64Audio.length, '===')
 
-      return {
-        success: true,
-        audioUrl: audioUrl,
-        duration: Math.ceil(text.length * 200) // 估算时长
+      // 将 base64 转换为 ArrayBuffer
+      const audioBuffer = Taro.base64ToArrayBuffer(base64Audio)
+      console.log('音频数据已解码，大小:', audioBuffer.byteLength, '字节')
+
+      // 将 PCM 转换为 WAV 格式（添加 WAV 文件头）
+      const sampleRate = 24000  // TTS API 返回 24000Hz
+      const numChannels = 1     // 单声道
+      const bitsPerSample = 16  // 16-bit
+      const wavBuffer = this.pcmToWav(audioBuffer, sampleRate, numChannels, bitsPerSample)
+      console.log('WAV 格式音频，大小:', wavBuffer.byteLength, '字节')
+
+      // 生成临时文件路径（使用 .wav 扩展名）
+      const timestamp = Date.now()
+      const fileName = `tts_audio_${timestamp}.wav`
+      const tempDir = `${Taro.env.USER_DATA_PATH}/temp`
+      const audioFilePath = `${tempDir}/${fileName}`
+
+      try {
+        // 确保临时目录存在
+        const fs = Taro.getFileSystemManager()
+        try {
+          fs.accessSync(tempDir)
+        } catch (e) {
+          // 目录不存在，创建目录
+          fs.mkdirSync(tempDir, true)
+        }
+
+        // 将 WAV 格式的音频数据写入临时文件
+        fs.writeFileSync(audioFilePath, wavBuffer, 'binary')
+        console.log('=== 音频已保存到临时文件:', audioFilePath, '===')
+
+        return {
+          success: true,
+          audioUrl: audioFilePath,
+          duration: Math.ceil(text.length * 200) // 估算时长
+        }
+      } catch (fileError) {
+        console.error('保存音频文件失败:', fileError)
+        return {
+          success: false,
+          errorMessage: '语音合成失败：无法保存音频文件'
+        }
       }
     } catch (error) {
       console.error('豆包 TTS 语音合成失败:', error)
@@ -962,9 +1097,24 @@ class VoiceService {
    */
   play(audioUrl: string, messageId?: string): void {
     try {
-      // 停止当前播放
+      // 停止并销毁旧的音频实例（如果存在）
       if (this.innerAudio) {
-        this.innerAudio.stop()
+        try {
+          this.innerAudio.stop()
+          this.innerAudio.destroy()
+        } catch (err) {
+          console.warn('停止/销毁旧音频实例时出错，忽略:', err)
+        }
+        this.innerAudio = null
+      }
+
+      // 创建新的音频实例
+      this.initAudioPlayer()
+
+      // 确保 audio player 已成功初始化
+      if (!this.innerAudio) {
+        console.error('音频播放器初始化失败')
+        return
       }
 
       // 设置音频源
@@ -1044,6 +1194,61 @@ class VoiceService {
       if (index > -1) {
         this.playStateListeners.splice(index, 1)
       }
+    }
+  }
+
+  /**
+   * 将 PCM 数据转换为 WAV 格式
+   * @param pcmData PCM 音频数据
+   * @param sampleRate 采样率
+   * @param numChannels 声道数
+   * @param bitsPerSample 位深
+   * @returns WAV 格式的 ArrayBuffer
+   */
+  private pcmToWav(pcmData: ArrayBuffer, sampleRate: number, numChannels: number, bitsPerSample: number): ArrayBuffer {
+    const pcmView = new Uint8Array(pcmData)
+    const pcmLength = pcmData.byteLength
+    const wavLength = 44 + pcmLength  // 44 字节 WAV 头 + PCM 数据
+    const wavBuffer = new ArrayBuffer(wavLength)
+    const wavView = new DataView(wavBuffer)
+
+    // RIFF 头 (12 字节)
+    this.writeString(wavView, 0, 'RIFF')
+    wavView.setUint32(4, wavLength - 8, true)  // 文件大小 - 8
+    this.writeString(wavView, 8, 'WAVE')
+
+    // fmt chunk (24 字节)
+    this.writeString(wavView, 12, 'fmt ')
+    wavView.setUint32(16, 16, true)  // fmt chunk 大小
+    wavView.setUint16(20, 1, true)   // 音频格式: 1 = PCM
+    wavView.setUint16(22, numChannels, true)  // 声道数
+    wavView.setUint32(24, sampleRate, true)  // 采样率
+    const byteRate = sampleRate * numChannels * bitsPerSample / 8
+    wavView.setUint32(28, byteRate, true)  // 字节率
+    const blockAlign = numChannels * bitsPerSample / 8
+    wavView.setUint16(32, blockAlign, true)  // 块对齐
+    wavView.setUint16(34, bitsPerSample, true)  // 位深
+
+    // data chunk (8 字节)
+    this.writeString(wavView, 36, 'data')
+    wavView.setUint32(40, pcmLength, true)  // 数据大小
+
+    // 写入 PCM 数据
+    const wavBytes = new Uint8Array(wavBuffer)
+    wavBytes.set(pcmView, 44)
+
+    return wavBuffer
+  }
+
+  /**
+   * 将字符串写入 DataView
+   * @param view DataView
+   * @param offset 偏移量
+   * @param string 字符串
+   */
+  private writeString(view: DataView, offset: number, string: string): void {
+    for (let i = 0; i < string.length; i++) {
+      view.setUint8(offset + i, string.charCodeAt(i))
     }
   }
 

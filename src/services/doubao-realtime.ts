@@ -369,7 +369,7 @@ class DoubaoRealtimeService {
         bits: REALTIME_CONFIG.audio.bits
       },
       request: {
-        reqid: `req_${Date.now()}_${this.taskCount++}`,
+        reqid: Date.now(), // 使用纯数字时间戳
         nbest: 1
       },
       asr_config: {

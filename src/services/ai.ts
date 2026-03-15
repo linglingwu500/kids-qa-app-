@@ -1,6 +1,14 @@
 import { Answer } from '../types'
 import { request } from '../utils/request'
 
+/**
+ * 对话历史消息接口
+ */
+interface ConversationMessage {
+  role: 'user' | 'assistant'
+  content: string
+}
+
 // AI 服务配置
 const AI_CONFIG = {
   baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
@@ -10,9 +18,15 @@ const AI_CONFIG = {
 
 /**
  * 调用 AI 生成适合儿童理解的回答
+ * @param question 当前问题
+ * @param history 对话历史（用于多轮对话上下文）
+ * @param childAge 孩子年龄
+ * @param childStage 认知发展阶段
+ * @param childName 孩子名字
  */
 export async function generateChildFriendlyAnswer(
   question: string,
+  history: ConversationMessage[],
   childAge: number,
   childStage: number,
   childName: string
@@ -23,6 +37,33 @@ export async function generateChildFriendlyAnswer(
     console.log('=== AI请求开始 ===')
     console.log('URL:', AI_CONFIG.baseUrl + '/chat/completions')
     console.log('Model:', AI_CONFIG.model)
+    console.log('对话历史长度:', history.length)
+    console.log('当前问题:', question)
+
+    // 构建 messages 数组，包含系统提示词、历史对话和当前问题
+    const messages: Array<{ role: string; content: string }> = [
+      {
+        role: 'system',
+        content: getStageSystemPrompt(childStage)
+      },
+      // 添加对话历史（最近 6 轮，即 12 条消息）
+      ...history.slice(-12),
+      {
+        role: 'user',
+        content: prompt
+      }
+    ]
+
+    console.log('发送的消息数量:', messages.length)
+
+    // 打印完整的 messages 内容（格式化输出）
+    console.log('========== 发送给 AI 的完整输入 ==========')
+    messages.forEach((msg, index) => {
+      console.log(`消息 ${index + 1}:`)
+      console.log(`  角色: ${msg.role}`)
+      console.log(`  内容: ${msg.content.substring(0, 100)}${msg.content.length > 100 ? '...' : ''}`)
+    })
+    console.log('========================================')
 
     const response = await request({
       url: AI_CONFIG.baseUrl + '/chat/completions',
@@ -32,16 +73,7 @@ export async function generateChildFriendlyAnswer(
       },
       data: {
         model: AI_CONFIG.model,
-        messages: [
-          {
-            role: 'system',
-            content: getStageSystemPrompt(childStage)
-          },
-          {
-            role: 'user',
-            content: prompt
-          }
-        ],
+        messages,
         temperature: 0.8,
         max_tokens: 1500
       }

@@ -74,6 +74,9 @@ const Index = () => {
   const isRecordingRef = React.useRef(false)
   const isCancelingRecordingRef = React.useRef(false)
 
+  // 跟踪当前播放的消息（用于在播放结束时触发继续探索问题）
+  const currentPlayingMessageRef = React.useRef<ChatMessage | null>(null)
+
   // 音频播放器
   const [innerAudio, setInnerAudio] = useState<Taro.InnerAudioContext | null>(null)
   const [playProgress, setPlayProgress] = useState(0) // 播放进度（0-1）
@@ -152,6 +155,55 @@ const Index = () => {
       console.error('滚动失败:', error)
     }
   }, [chatMessages.length])
+
+  // 监听语音播放状态变化
+  useEffect(() => {
+    const unsubscribe = voiceService.onPlayStateChange((state) => {
+      // 更新播放进度
+      setPlayProgress(state.progress)
+      setPlayDuration(state.duration)
+
+      // 更新消息的播放状态
+      if (state.currentMessageId) {
+        // 开始播放：记录当前播放的消息
+        setChatMessages(prev =>
+          prev.map(m => {
+            if (m.id === state.currentMessageId) {
+              currentPlayingMessageRef.current = m
+              return { ...m, isPlaying: true }
+            }
+            return { ...m, isPlaying: false }
+          })
+        )
+      } else if (!state.isPlaying) {
+        // 停止播放：清除所有消息的播放状态
+        setChatMessages(prev =>
+          prev.map(m => ({ ...m, isPlaying: false }))
+        )
+
+        // 检查是否需要播放继续探索问题
+        const lastMessage = currentPlayingMessageRef.current
+        if (lastMessage &&
+            lastMessage.role === 'assistant' &&
+            lastMessage.curiosityQuestions &&
+            lastMessage.curiosityQuestions.length > 0) {
+          // 播放第一个继续探索问题
+          const firstQuestion = lastMessage.curiosityQuestions[0]
+          console.log('=== 播放继续探索问题 ===', firstQuestion)
+
+          // 添加一个小延迟，让用户感受到回答已经结束
+          setTimeout(() => {
+            playCuriosityQuestion(firstQuestion, lastMessage.id)
+          }, 500)
+
+          // 清除引用，避免重复播放
+          currentPlayingMessageRef.current = null
+        }
+      }
+    })
+
+    return unsubscribe
+  }, [])
 
   // 初始化实时语音服务
   useEffect(() => {
@@ -357,8 +409,27 @@ const Index = () => {
       saveQuestion(questionData)
 
       // 调用 AI 生成回答
+      console.log('=== handleSubmit 调用 AI 生成回答 ===')
+
+      // 收集对话历史（排除默认回答，只保留真实对话）
+      const conversationHistory = chatMessages
+        .filter(msg => msg.content.trim().length > 0) // 过滤空消息
+        .filter(msg => !msg.content.includes('我的耳朵好像出小问题')) // 过滤默认回答
+        .slice(-12) // 只取最近的 6 轮对话
+        .map(msg => ({
+          role: msg.role,
+          content: msg.content
+        }))
+
+      console.log('========== 构建的对话历史 ==========')
+      conversationHistory.forEach((msg, index) => {
+        console.log(`历史 ${index + 1}: [${msg.role}] ${msg.content.substring(0, 100)}${msg.content.length > 100 ? '...' : ''}`)
+      })
+      console.log('==================================')
+
       const answer = await generateChildFriendlyAnswer(
         userQuestion,
+        conversationHistory,
         childInfo.age,
         selectedStage,
         childInfo.name
@@ -377,6 +448,7 @@ const Index = () => {
         timestamp: new Date().toISOString()
       }
       setChatMessages(prev => [...prev, assistantMessage])
+
     } catch (error) {
       console.error('提交失败:', error)
       Taro.showToast({ title: '提交失败，请重试', icon: 'none' })
@@ -728,6 +800,27 @@ const Index = () => {
         return
       }
 
+      // 检查问题是否为空
+      const trimmedQuestion = questionText.trim()
+      if (!trimmedQuestion || trimmedQuestion.length === 0) {
+        console.log('问题为空，使用默认回答')
+        // 直接显示默认回答，不添加用户消息
+        const defaultAnswer = '哎呀，我的耳朵好像出小问题啦，没听到你的声音。你可以再说一次吗？我保证这次认真听！'
+
+        const assistantMessage: ChatMessage = {
+          id: Date.now().toString() + '_default',
+          role: 'assistant',
+          content: defaultAnswer,
+          timestamp: new Date().toISOString()
+          // 不包含 curiosityQuestions，避免播放继续探索问题
+        }
+        setChatMessages(prev => [...prev, assistantMessage])
+
+        // 自动播放默认回答
+        autoPlayVoice(assistantMessage)
+        return
+      }
+
       setIsSubmitting(true)
 
       // 添加用户消息到聊天记录
@@ -752,27 +845,62 @@ const Index = () => {
 
       // 调用 AI 生成回答
       console.log('=== 调用 AI 生成回答 ===')
+      console.log('当前聊天消息数量:', chatMessages.length)
+
+      // 收集对话历史（排除默认回答，只保留真实对话）
+      const conversationHistory = chatMessages
+        .filter(msg => msg.content.trim().length > 0) // 过滤空消息
+        .filter(msg => !msg.content.includes('我的耳朵好像出小问题')) // 过滤默认回答
+        .slice(-12) // 只取最近的 6 轮对话
+        .map(msg => ({
+          role: msg.role,
+          content: msg.content
+        }))
+
+      console.log('========== 构建的对话历史 ==========')
+      conversationHistory.forEach((msg, index) => {
+        console.log(`历史 ${index + 1}: [${msg.role}] ${msg.content.substring(0, 100)}${msg.content.length > 100 ? '...' : ''}`)
+      })
+      console.log('==================================')
+
       const answer = await generateChildFriendlyAnswer(
         questionText,
+        conversationHistory,
         childInfo.age,
         selectedStage,
         childInfo.name
       )
       console.log('=== AI 回答 ===', answer)
 
+      // 检查回答是否为空
+      const trimmedAnswer = answer.content.trim()
+      let finalAnswer = answer
+      if (!trimmedAnswer || trimmedAnswer.length === 0) {
+        console.log('AI 回答为空，使用默认回答')
+        finalAnswer = {
+          ...answer,
+          content: '哎呀，我的耳朵好像出小问题啦，没听到你的声音。你可以再说一次吗？我保证这次认真听！',
+          simpleExplanation: '',
+          curiosityQuestions: [] // 空数组，避免播放继续探索问题
+        }
+      }
+
       // 更新问题，添加回答
-      updateQuestionWithAnswer(questionData.id, answer)
+      updateQuestionWithAnswer(questionData.id, finalAnswer)
 
       // 添加AI回答消息到聊天记录（显示文字回答）
       const assistantMessage: ChatMessage = {
         id: Date.now().toString() + '_ans',
         role: 'assistant',
-        content: answer.content,
-        simpleExplanation: answer.simpleExplanation,
-        curiosityQuestions: answer.curiosityQuestions,
+        content: finalAnswer.content,
+        simpleExplanation: finalAnswer.simpleExplanation,
+        curiosityQuestions: finalAnswer.curiosityQuestions,
         timestamp: new Date().toISOString()
       }
       setChatMessages(prev => [...prev, assistantMessage])
+
+      // 自动播放语音回答
+      autoPlayVoice(assistantMessage)
 
       console.log('=== 消息提交完成 ===')
     } catch (error) {
@@ -885,30 +1013,15 @@ const Index = () => {
         prev.map(m => ({ ...m, isPlaying: wasPlaying ? false : m.id === message.id }))
       )
 
-      // 如果正在播放，则暂停
+      // 如果正在播放，则停止
       if (wasPlaying) {
-        if (innerAudio) {
-          innerAudio.pause()
-          innerAudio.stop()
-        }
+        voiceService.stop()
         setPlayProgress(0)
         return
       }
 
-      // TODO: 接入真实的 TTS 服务后，使用 voiceService.playText()
-      // 目前暂时显示提示，等待接入 TTS 服务
-      Taro.showToast({
-        title: '语音功能正在接入中',
-        icon: 'none',
-        duration: 2000
-      })
-
-      // 恢复播放状态
-      setTimeout(() => {
-        setChatMessages(prev =>
-          prev.map(m => ({ ...m, isPlaying: false }))
-        )
-      }, 2000)
+      // 播放语音
+      await voiceService.playText(message.content, message.id)
 
     } catch (error) {
       console.error('播放语音失败:', error)
@@ -917,6 +1030,61 @@ const Index = () => {
       )
       setPlayProgress(0)
       Taro.showToast({ title: '播放语音失败', icon: 'none' })
+    }
+  }
+
+  // 自动播放语音回答
+  const autoPlayVoice = async (message: ChatMessage) => {
+    try {
+      console.log('=== 自动播放语音 ===', message.content)
+
+      // 记录当前播放的消息（用于后续播放继续探索问题）
+      currentPlayingMessageRef.current = message
+
+      // 更新消息播放状态
+      setChatMessages(prev =>
+        prev.map(m => ({ ...m, isPlaying: m.id === message.id }))
+      )
+
+      // 播放语音
+      await voiceService.playText(message.content, message.id)
+
+    } catch (error) {
+      console.error('自动播放语音失败:', error)
+      currentPlayingMessageRef.current = null
+      setChatMessages(prev =>
+        prev.map(m => ({ ...m, isPlaying: false }))
+      )
+      setPlayProgress(0)
+    }
+  }
+
+  // 播放继续探索问题
+  const playCuriosityQuestion = async (question: string, parentMessageId: string) => {
+    try {
+      console.log('=== 播放继续探索问题 ===', question)
+
+      // 清除引用，避免播放探索问题结束后再次触发
+      currentPlayingMessageRef.current = null
+
+      // 直接播放问题，不需要使用 messageId（避免和回答的播放状态冲突）
+      await voiceService.playText(question, `${parentMessageId}_curiosity_0`)
+
+      // 播放完成后，将第一个继续探索问题自动填入输入框
+      // 注意：这里不自动提交，而是让用户确认后再提交
+      setQuestion(question)
+
+      // 提示用户
+      setTimeout(() => {
+        Taro.showToast({
+          title: '你可以继续探索这个问题',
+          icon: 'none',
+          duration: 2000
+        })
+      }, 1500)
+
+    } catch (error) {
+      console.error('播放继续探索问题失败:', error)
     }
   }
 
