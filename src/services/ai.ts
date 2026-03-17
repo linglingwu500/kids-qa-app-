@@ -1,5 +1,6 @@
 import { Answer } from '../types'
 import { request } from '../utils/request'
+import { getGLMApiKey, DOUBAO_CONFIG } from '../config/env'
 
 /**
  * 对话历史消息接口
@@ -9,12 +10,32 @@ interface ConversationMessage {
   content: string
 }
 
-// AI 服务配置
+// AI 服务配置 - 使用豆包 LLM
 const AI_CONFIG = {
-  baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
-  apiKey: 'ce430a2eddae4513a1d691060b0309f1.hlJGURZ4HTFHxlos',
-  model: 'glm-5' // 可选: glm-4, glm-4-flash, glm-3-turbo
+  baseUrl: DOUBAO_CONFIG.API_ENDPOINT,
+  get apiKey(): string {
+    // 优先使用专门的 LLM API Key（方舟平台），否则使用 Access Key
+    const llmApiKey = DOUBAO_CONFIG.LLM_API_KEY
+    if (llmApiKey) {
+      console.log('使用方舟 LLM API Key')
+      return llmApiKey
+    }
+    const accessKey = DOUBAO_CONFIG.ACCESS_KEY
+    console.log('使用 Access Key 作为备用')
+    return accessKey
+  },
+  get model(): string {
+    // 使用配置的推理端点 ID
+    const model = DOUBAO_CONFIG.LLM_MODEL || 'ep-20250403001607-h8hxw'
+    console.log('使用推理端点:', model)
+    return model
+  }
 }
+
+console.log('=== AI 服务配置 ===')
+console.log('使用服务:', '豆包 LLM')
+console.log('API Endpoint:', AI_CONFIG.baseUrl)
+console.log('Model:', AI_CONFIG.model)
 
 /**
  * 调用 AI 生成适合儿童理解的回答
@@ -37,17 +58,25 @@ export async function generateChildFriendlyAnswer(
     console.log('=== AI请求开始 ===')
     console.log('URL:', AI_CONFIG.baseUrl + '/chat/completions')
     console.log('Model:', AI_CONFIG.model)
+    console.log('API Key:', AI_CONFIG.apiKey ? `已配置: ${AI_CONFIG.apiKey.substring(0, 10)}...` : '未配置')
+    console.log('API Key 长度:', AI_CONFIG.apiKey?.length || 0)
     console.log('对话历史长度:', history.length)
     console.log('当前问题:', question)
 
+    // 检查 API Key 是否配置
+    if (!AI_CONFIG.apiKey) {
+      throw new Error('豆包 API Key 未配置，请在 .env 文件中设置 DOUBAO_ACCESS_KEY')
+    }
+
     // 构建 messages 数组，包含系统提示词、历史对话和当前问题
+    // 注意：对话历史中不包含 system 消息，避免旧的配置影响新的回答
     const messages: Array<{ role: string; content: string }> = [
       {
         role: 'system',
         content: getStageSystemPrompt(childStage)
       },
-      // 添加对话历史（最近 6 轮，即 12 条消息）
-      ...history.slice(-12),
+      // 添加对话历史（只添加 user/assistant 消息，过滤掉 system 消息）
+      ...history.filter(msg => msg.role !== 'system').slice(-12),
       {
         role: 'user',
         content: prompt
@@ -134,6 +163,19 @@ function getStageSystemPrompt(stage: number): string {
 }
 
 /**
+ * 根据年龄段获取对应的描述
+ */
+function getStageAgeRange(stage: number): string {
+  const stageConfig = {
+    0: '3-5岁',
+    1: '6-7岁',
+    2: '8-9岁',
+    3: '10-12岁'
+  }
+  return stageConfig[stage] || stageConfig[0]
+}
+
+/**
  * 构建适合儿童的提示词
  */
 function buildChildFriendlyPrompt(
@@ -142,14 +184,24 @@ function buildChildFriendlyPrompt(
   childStage: number,
   childName: string
 ): string {
+  // 根据选择的年龄段获取描述
+  const stageAgeRange = getStageAgeRange(childStage)
+
   return `
-我叫${childName}，今年${childAge}岁了。我的问题是：${question}
+我叫${childName}，属于${stageAgeRange}年龄段。我的问题是：${question}
 
 请用以下方式回答我：
-1. 用简单、生动、有趣的语言，符合${childAge}岁孩子的理解水平
+1. 用简单、生动、有趣的语言，符合${stageAgeRange}孩子的理解水平
 2. 用生活化的比喻和例子
 3. 回答要温暖、鼓励，让我觉得我的问题很有价值
-4. 最后给我1-2个有趣的问题，这些问题必须与原问题直接相关，是原问题的延伸或深入，比如：
+
+**重要：多轮对话指南**
+- 如果我的问题是在回应你之前提出的"继续探索"问题，请继续讨论那个话题
+- 如果我说"我不懂"、"不明白"等，请用更简单的方式解释刚才说的内容
+- 保持对话的自然连贯，让我感觉我们在持续聊天
+- 利用之前对话的上下文来理解我的问题
+
+最后给我1-2个有趣的问题，这些问题必须与当前话题直接相关，是当前话题的延伸或深入，比如：
    - 如果问"天为什么是蓝色的？"，延伸问题可以是"那晚上为什么是黑色的？"或"彩虹为什么有这么多颜色？"
    - 如果问"小鸟为什么会飞？"，延伸问题可以是"所有的鸟都会飞吗？"或"飞机为什么能飞？"
 
@@ -158,7 +210,7 @@ function buildChildFriendlyPrompt(
 
 【给小朋友的话】：简单的一句话总结
 
-【继续探索】：1-2个与原问题相关的延伸问题
+【继续探索】：1-2个与当前话题相关的延伸问题
 `
 }
 
@@ -216,7 +268,13 @@ export async function analyzeChildInterests(
 根据孩子的问题分析兴趣和特点：
 ${questions.map((q, i) => `${i + 1}. ${q.content}`).join('\n')}
 
-分析内容：兴趣领域、性格特点、学习风格、给家长的建议
+请分析以下内容：
+1. 孩子的兴趣领域（从问题中发现孩子对哪些主题感兴趣）
+2. 孩子的性格特点（通过提问方式展现出的特质）
+3. 孩子的学习风格（如何探索和理解新知识）
+4. 给家长的建议（如何更好地支持和引导孩子）
+
+请用温暖、鼓励的语气，给家长一个全面的分析。
 `
 
     console.log('=== 开始分析孩子兴趣 ===')
@@ -233,7 +291,7 @@ ${questions.map((q, i) => `${i + 1}. ${q.content}`).join('\n')}
         messages: [
           {
             role: 'system',
-            content: '你是一位儿童教育专家，通过问题分析孩子的兴趣和特点。'
+            content: '你是一位儿童教育专家，通过问题分析孩子的兴趣和特点。你的分析应该温暖、专业，给家长实用的建议。'
           },
           {
             role: 'user',
@@ -246,25 +304,20 @@ ${questions.map((q, i) => `${i + 1}. ${q.content}`).join('\n')}
     })
 
     // 解析响应（OpenAI 兼容格式）
-    const content = response.choices[0].message?.content || ''
+    const rawAnalysis = response.choices[0].message?.content || ''
     console.log('=== AI返回的分析内容 ===')
-    console.log(content)
+    console.log(rawAnalysis)
 
-    const result = parseAnalysisResponse(content)
-    console.log('=== 解析结果 ===')
-    console.log('兴趣领域:', result.interestTopics)
-    console.log('性格特点:', result.personalityTraits)
-    console.log('学习风格:', result.learningStyle)
-    console.log('引导建议:', result.suggestions)
-
-    return result
+    // 返回原始分析文本
+    return {
+      rawAnalysis,
+      recommendations: []
+    }
   } catch (error) {
     console.error('分析孩子兴趣失败:', error)
     return {
-      interestTopics: ['探索'],
-      personalityTraits: ['好奇心强'],
-      learningStyle: '喜欢提问',
-      suggestions: ['多鼓励孩子提问', '和孩子一起探索答案']
+      rawAnalysis: '抱歉，分析暂时无法完成，请稍后再试。',
+      recommendations: []
     }
   }
 }
@@ -273,19 +326,24 @@ ${questions.map((q, i) => `${i + 1}. ${q.content}`).join('\n')}
  * 根据孩子兴趣推荐内容
  */
 export async function getRecommendations(
-  interests: string[],
+  questions: Array<{ content: string; createdAt: string }>,
   childAge: number
-): Promise<any[]> {
+): Promise<{ rawAnalysis: string }[]> {
   try {
+    // 提取最近的5个问题作为参考
+    const recentQuestions = questions.slice(-5).map(q => q.content)
+
     const prompt = `
-为${childAge}岁儿童推荐适合的优质内容，孩子的兴趣包括：${interests.join('、')}
+孩子今年${childAge}岁，最近问了这些问题：
+${recentQuestions.map((q, i) => `${i + 1}. ${q}`).join('\n')}
 
-请推荐以下类型的内容：
-1. 1-2本儿童书籍
-2. 1-2部动画片
-3. 1部儿童电影
+请根据孩子的提问内容，分析孩子的兴趣点，并推荐相关的内容：
 
-每个推荐包括：类型（书籍/动画片/影片）、标题、适合年龄、推荐理由、关联主题
+1. **书籍推荐**：1-2本与孩子提问主题相关的儿童书籍，说明书名、适合年龄、推荐理由
+2. **动画片推荐**：1-2部与孩子兴趣相关的动画片，说明片名、适合年龄、推荐理由
+3. **儿童电影推荐**：1部适合的电影，说明片名、适合年龄、推荐理由
+
+请用温暖、专业的语气，给出详细的推荐理由，帮助家长选择与孩子兴趣高度相关的优质内容。
 `
 
     const response = await request({
@@ -299,7 +357,7 @@ export async function getRecommendations(
         messages: [
           {
             role: 'system',
-            content: '你是一位儿童内容推荐专家，为孩子推荐健康优质的书籍、动画片和电影。'
+            content: '你是一位儿童内容推荐专家，善于根据孩子的提问发现其兴趣点，并推荐高度相关的优质书籍、动画片和电影。'
           },
           {
             role: 'user',
@@ -312,13 +370,15 @@ export async function getRecommendations(
     })
 
     // 解析响应（OpenAI 兼容格式）
-    const content = response.choices[0].message?.content || ''
-    console.log('=== 推荐内容 ===')
-    console.log(content)
-    return parseRecommendationResponse(content)
+    const rawAnalysis = response.choices[0].message?.content || ''
+    console.log('=== AI返回的推荐内容 ===')
+    console.log(rawAnalysis)
+
+    // 返回包含原始 AI 分析的推荐
+    return [{ rawAnalysis }]
   } catch (error) {
     console.error('获取推荐失败:', error)
-    return []
+    return [{ rawAnalysis: '抱歉，暂时无法获取推荐内容，请稍后再试。' }]
   }
 }
 

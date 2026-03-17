@@ -1,26 +1,6 @@
 import Taro from '@tarojs/taro'
 import { doubaoRealtimeService, type ASRResult as RealtimeASRResult, type TTSResult as RealtimeTTSResult, type ChatResult } from './doubao-realtime'
-
-/**
- * 辅助函数：解析 Taro 环境变量（Taro defineConstants 会替换为 JSON 字符串）
- */
-const parseEnv = (value: any): string => {
-  // Taro defineConstants 会将值替换为 JSON.stringify() 的结果
-  // 例如：JSON.stringify("6497768638") => "\"6497768638\""
-  // 所以运行时 value 就是 "\"6497768638\""（带引号的字符串）
-  // 我们需要解析它以得到真实的值 "6497768638"
-  if (typeof value === 'string' && value.startsWith('"') && value.endsWith('"')) {
-    try {
-      // 尝试解析 JSON 字符串
-      const parsed = JSON.parse(value)
-      return typeof parsed === 'string' ? parsed : value
-    } catch (e) {
-      // 如果解析失败，尝试去掉首尾引号
-      return value.slice(1, -1)
-    }
-  }
-  return String(value)
-}
+import { GLM_CONFIG, DOUBAO_CONFIG } from '../config/env'
 
 /**
  * 语音服务配置
@@ -38,7 +18,9 @@ const VOICE_CONFIG = {
   // GLM-ASR 配置（备用）
   glmAsr: {
     baseUrl: 'https://open.bigmodel.cn/api/paas/v4/audio/transcriptions',
-    apiKey: parseEnv(process.env.GLM_API_KEY || ''),
+    get apiKey(): string {
+      return GLM_CONFIG.API_KEY
+    },
     model: 'glm-asr-2512'
   },
   // 豆包级联模式配置
@@ -46,15 +28,23 @@ const VOICE_CONFIG = {
     // ASR 配置（豆包语音识别）
     asr: {
       baseUrl: 'https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash',
-      appId: parseEnv(process.env.DOUBAO_APP_ID || ''),
-      accessKey: parseEnv(process.env.DOUBAO_ACCESS_KEY || ''),
+      get appId(): string {
+        return DOUBAO_CONFIG.APP_ID
+      },
+      get accessKey(): string {
+        return DOUBAO_CONFIG.ACCESS_KEY
+      },
       language: 'zh-CN',
       format: 'mp3'  // 与录音格式保持一致
     },
     // LLM 配置（火山方舟）
     llm: {
-      baseUrl: parseEnv(process.env.DOUBAO_API_ENDPOINT || 'https://ark.cn-beijing.volces.com/api/v3'),
-      apiKey: parseEnv(process.env.DOUBAO_ACCESS_KEY || ''),
+      get baseUrl(): string {
+        return DOUBAO_CONFIG.API_ENDPOINT
+      },
+      get apiKey(): string {
+        return DOUBAO_CONFIG.ACCESS_KEY
+      },
       model: 'doubao-pro-32k',
       maxTokens: 1024,
       temperature: 0.7
@@ -62,9 +52,15 @@ const VOICE_CONFIG = {
     // TTS 配置（豆包语音合成）
     tts: {
       baseUrl: 'https://openspeech.bytedance.com/api/v1',
-      appId: parseEnv(process.env.DOUBAO_APP_ID || ''),
-      accessKey: parseEnv(process.env.DOUBAO_ACCESS_KEY || ''),
-      appKey: parseEnv(process.env.DOUBAO_SECRET_KEY || ''),  // TTS 需要使用 Secret Key 作为 App Key
+      get appId(): string {
+        return DOUBAO_CONFIG.APP_ID
+      },
+      get accessKey(): string {
+        return DOUBAO_CONFIG.ACCESS_KEY
+      },
+      get appKey(): string {
+        return DOUBAO_CONFIG.SECRET_KEY
+      },  // TTS 需要使用 Secret Key 作为 App Key
       voiceType: 'BV001_streaming',  // 通用女声（儿童友好）
       speed: 1.0,
       pitch: 1.0
@@ -177,8 +173,9 @@ class VoiceService {
           this.startReject(err)
           this.startReject = null
         }
+        // 录音错误时，stopResolve 传入一个包含错误信息的对象
         if (this.stopResolve) {
-          this.stopResolve(null)
+          this.stopResolve({ tempFilePath: '', duration: 0, fileSize: 0, error: err })
           this.stopResolve = null
         }
         if (this.cancelResolve) {
@@ -330,9 +327,33 @@ class VoiceService {
 
         // 保存 stop 的 resolve
         this.stopResolve = async (res: any) => {
+          console.log('录音停止回调:', res)
+
+          // 检查是否有错误
+          if (!res || res.error || !res.tempFilePath) {
+            console.error('录音失败，无法获取录音文件:', res)
+            resolve({
+              success: false,
+              text: '',
+              errorMessage: '录音失败，请重试'
+            })
+            return
+          }
+
           console.log('录音文件:', res.tempFilePath)
           console.log('录音时长:', res.duration)
           console.log('文件大小:', res.fileSize)
+
+          // 检查录音时长，太短可能是误操作
+          if (res.duration < 500) {
+            console.warn('录音时长太短:', res.duration)
+            resolve({
+              success: false,
+              text: '',
+              errorMessage: '录音时间太短，请重新录音'
+            })
+            return
+          }
 
           // 如果是实时模式，直接返回文件路径
           if (VOICE_CONFIG.mode === 'doubao-realtime') {
@@ -1416,13 +1437,13 @@ class VoiceService {
 // 导出单例
 export const voiceService = new VoiceService()
 
-// 初始化实时语音服务配置（使用 defineConstants 替换后的环境变量）
-if (typeof process !== 'undefined' && process.env.DOUBAO_REALTIME_APP_ID) {
+// 初始化实时语音服务配置
+if (DOUBAO_CONFIG.REALTIME_APP_ID) {
   doubaoRealtimeService.setConfig({
-    appId: process.env.DOUBAO_REALTIME_APP_ID,
-    accessKey: process.env.DOUBAO_REALTIME_ACCESS_KEY,
-    resourceId: process.env.DOUBAO_REALTIME_RESOURCE_ID || 'volc.speech.dialog',
-    appKey: process.env.DOUBAO_REALTIME_APP_KEY || 'PlgvMymc7f3tQnJ6'
+    appId: DOUBAO_CONFIG.REALTIME_APP_ID,
+    accessKey: DOUBAO_CONFIG.REALTIME_ACCESS_KEY,
+    resourceId: DOUBAO_CONFIG.REALTIME_RESOURCE_ID,
+    appKey: DOUBAO_CONFIG.REALTIME_APP_KEY
   })
 }
 

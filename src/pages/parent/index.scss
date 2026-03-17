@@ -277,6 +277,15 @@
   display: block;
 }
 
+.analysis-text {
+  font-size: 26px;
+  color: #555;
+  line-height: 1.8;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  display: block;
+}
+
 .tags-list {
   display: flex;
   flex-wrap: wrap;

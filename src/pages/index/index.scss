@@ -302,6 +302,30 @@
   box-shadow: 0 4px 16px rgba(248, 180, 217, 0.12);
 }
 
+/* 年龄段切换消息 */
+.message-stage-change {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 16px 24px;
+  margin: 16px 0;
+  background: linear-gradient(135deg, #ffe5f0 0%, #e8f4ff 100%);
+  border-radius: 20px;
+  border: 2px solid #f8b4d9;
+  box-shadow: 0 4px 12px rgba(248, 180, 217, 0.15);
+
+  .stage-change-icon {
+    font-size: 32px;
+    margin-right: 12px;
+  }
+
+  .stage-change-text {
+    font-size: 26px;
+    color: #6ba3f5;
+    font-weight: 600;
+  }
+}
+
 /* 语音控制按钮 */
 .voice-controls {
   display: flex;

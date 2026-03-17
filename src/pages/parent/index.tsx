@@ -51,13 +51,13 @@ const Parent = () => {
 
     setIsAnalyzing(true)
     try {
-      // 分析兴趣和特点
+      // 分析兴趣和特点，获取推荐内容
       const analysis = await analyzeChildInterests(questions)
       setInterestAnalysis(analysis)
 
-      // 获取推荐内容
+      // 获取推荐内容（传入孩子的问题列表，以便根据问题进行推荐）
       const recommendations = await getRecommendations(
-        analysis.interestTopics || [],
+        questions,
         childInfo?.age || 6
       )
       setRecommendations(recommendations)
@@ -70,18 +70,6 @@ const Parent = () => {
     } finally {
       setIsAnalyzing(false)
     }
-  }
-
-  const handleRecommendationClick = (rec: Recommendation) => {
-    // 复制推荐内容到剪贴板
-    const typeText = rec.type === 'book' ? '书籍' : rec.type === 'animation' ? '动画片' : '影片'
-    const content = `【${typeText}】${rec.title}\n适合年龄：${rec.ageRange}\n推荐理由：${rec.description}`
-    Taro.setClipboardData({
-      data: content,
-      success: () => {
-        Taro.showToast({ title: '已复制', icon: 'success' })
-      }
-    })
   }
 
   return (
@@ -170,88 +158,19 @@ const Parent = () => {
             </View>
           ) : (
             <>
-              {/* 兴趣领域 */}
-              {interestAnalysis.interestTopics && interestAnalysis.interestTopics.length > 0 && (
+              {/* AI 分析结果 */}
+              {interestAnalysis.rawAnalysis && (
                 <View className="analysis-card">
-                  <Text className="card-title">🌟 兴趣领域</Text>
-                  <View className="tags-list">
-                    {interestAnalysis.interestTopics.map((topic, index) => (
-                      <View key={index} className="tag-item">
-                        <Text className="tag-text">{topic}</Text>
-                      </View>
-                    ))}
-                  </View>
-                </View>
-              )}
-
-              {/* 性格特点 */}
-              {interestAnalysis.personalityTraits && interestAnalysis.personalityTraits.length > 0 && (
-                <View className="analysis-card">
-                  <Text className="card-title">🎭 性格特点</Text>
-                  <View className="traits-list">
-                    {interestAnalysis.personalityTraits.map((trait, index) => (
-                      <View key={index} className="trait-item">
-                        <Text className="trait-dot">•</Text>
-                        <Text className="trait-text">{trait}</Text>
-                      </View>
-                    ))}
-                  </View>
-                </View>
-              )}
-
-              {/* 学习风格 */}
-              {interestAnalysis.learningStyle && (
-                <View className="analysis-card">
-                  <Text className="card-title">📚 学习风格</Text>
-                  <Text className="learning-text">{interestAnalysis.learningStyle}</Text>
-                </View>
-              )}
-
-              {/* 引导建议 */}
-              {interestAnalysis.suggestions && interestAnalysis.suggestions.length > 0 && (
-                <View className="analysis-card">
-                  <Text className="card-title">💡 引导建议</Text>
-                  <View className="suggestions-list">
-                    {interestAnalysis.suggestions.map((suggestion, index) => (
-                      <View key={index} className="suggestion-item">
-                        <Text className="suggestion-num">{index + 1}.</Text>
-                        <Text className="suggestion-text">{suggestion}</Text>
-                      </View>
-                    ))}
-                  </View>
+                  <Text className="card-title">🔍 AI 分析</Text>
+                  <Text className="analysis-text">{interestAnalysis.rawAnalysis}</Text>
                 </View>
               )}
 
               {/* 推荐内容 */}
-              {recommendations.length > 0 && (
-                <View className="recommendations-section">
-                  <Text className="section-title">📖 推荐内容</Text>
-                  <View className="recommendations-list">
-                    {recommendations.map((rec) => (
-                      <View
-                        key={rec.id}
-                        className="recommendation-card"
-                        onClick={() => handleRecommendationClick(rec)}
-                      >
-                        <View className="rec-header">
-                          <Text className="rec-type-badge">
-                            {rec.type === 'book' ? '📚 书籍' : rec.type === 'animation' ? '🎬 动画片' : '🎬 影片'}
-                          </Text>
-                          <Text className="rec-age">{rec.ageRange}</Text>
-                        </View>
-                        <Text className="rec-title">{rec.title}</Text>
-                        <Text className="rec-description">{rec.description}</Text>
-                        {rec.tags && rec.tags.length > 0 && (
-                          <View className="rec-tags">
-                            {rec.tags.map((tag, index) => (
-                              <Text key={index} className="rec-tag">{tag}</Text>
-                            ))}
-                          </View>
-                        )}
-                        <Text className="rec-hint">点击复制</Text>
-                      </View>
-                    ))}
-                  </View>
+              {recommendations.length > 0 && recommendations[0].rawAnalysis && (
+                <View className="analysis-card">
+                  <Text className="card-title">📖 推荐内容</Text>
+                  <Text className="analysis-text">{recommendations[0].rawAnalysis}</Text>
                 </View>
               )}
 

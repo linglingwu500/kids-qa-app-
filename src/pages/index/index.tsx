@@ -45,6 +45,8 @@ interface ChatMessage {
   timestamp: string
   isPlaying?: boolean
   showText?: boolean
+  isCuriosityQuestion?: boolean // 标记是否为「继续探索」问题
+  isStageChange?: boolean // 标记是否为年龄段切换消息
 }
 
 const Index = () => {
@@ -55,6 +57,7 @@ const Index = () => {
   const [selectedStage, setSelectedStage] = useState<number>(0)
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
   const [scrollTop, setScrollTop] = useState(0)
+  const [shouldResetHistory, setShouldResetHistory] = useState(false) // 是否需要重置对话历史
   const [showSetup, setShowSetup] = useState(false)
   const [childName, setChildName] = useState('')
   const [childAge, setChildAge] = useState('')
@@ -363,8 +366,25 @@ const Index = () => {
 
   const handleStageSelect = (index: number) => {
     try {
-      setSelectedStage(index)
-      Taro.setStorageSync('selected_age_stage', index.toString())
+      if (index !== selectedStage) {
+        const stageInfo = AGE_STAGES[index]
+        // 标记需要重置对话历史（但不清空UI显示）
+        setShouldResetHistory(true)
+        setSelectedStage(index)
+        Taro.setStorageSync('selected_age_stage', index.toString())
+
+        // 在对话框中添加年龄段切换提示
+        const stageChangeMessage: ChatMessage = {
+          id: `stage_change_${Date.now()}`,
+          role: 'assistant',
+          content: `已切换到${stageInfo.label}回答模式`,
+          timestamp: new Date().toISOString(),
+          isStageChange: true // 标记为年龄段切换消息
+        }
+        setChatMessages(prev => [...prev, stageChangeMessage])
+
+        Taro.showToast({ title: `已切换到${stageInfo.label}`, icon: 'success' })
+      }
     } catch (error) {
       console.error('选择阶段失败:', error)
     }
@@ -412,14 +432,25 @@ const Index = () => {
       console.log('=== handleSubmit 调用 AI 生成回答 ===')
 
       // 收集对话历史（排除默认回答，只保留真实对话）
-      const conversationHistory = chatMessages
-        .filter(msg => msg.content.trim().length > 0) // 过滤空消息
-        .filter(msg => !msg.content.includes('我的耳朵好像出小问题')) // 过滤默认回答
-        .slice(-12) // 只取最近的 6 轮对话
-        .map(msg => ({
-          role: msg.role,
-          content: msg.content
-        }))
+      // 如果刚刚切换了年龄段，使用空的历史对话（确保新年龄段风格生效）
+      let conversationHistory: Array<{ role: string; content: string }> = []
+      if (!shouldResetHistory) {
+        conversationHistory = chatMessages
+          .filter(msg => msg.content.trim().length > 0) // 过滤空消息
+          .filter(msg => !msg.content.includes('我的耳朵好像出小问题')) // 过滤默认回答
+          .filter(msg => !msg.isCuriosityQuestion) // 过滤继续探索问题
+          .filter(msg => !msg.isStageChange) // 过滤年龄段切换消息
+          .slice(-12) // 只取最近的 6 轮对话
+          .map(msg => ({
+            role: msg.role,
+            content: msg.content
+          }))
+      }
+
+      // 重置标志
+      if (shouldResetHistory) {
+        setShouldResetHistory(false)
+      }
 
       console.log('========== 构建的对话历史 ==========')
       conversationHistory.forEach((msg, index) => {
@@ -735,11 +766,13 @@ const Index = () => {
           // 发送音频到实时服务
           try {
             await voiceService.sendAudioToRealtime(result.tempFilePath)
-            Taro.showToast({ title: '发送成功', icon: 'success' })
           } catch (error) {
             console.error('发送音频失败:', error)
             Taro.showToast({ title: '发送失败', icon: 'none' })
           }
+        } else {
+          // 录音失败，显示错误信息
+          Taro.showToast({ title: result.errorMessage || '录音失败，请重试', icon: 'none' })
         }
       } else {
         // 级联模式：停止录音并识别
@@ -848,14 +881,25 @@ const Index = () => {
       console.log('当前聊天消息数量:', chatMessages.length)
 
       // 收集对话历史（排除默认回答，只保留真实对话）
-      const conversationHistory = chatMessages
-        .filter(msg => msg.content.trim().length > 0) // 过滤空消息
-        .filter(msg => !msg.content.includes('我的耳朵好像出小问题')) // 过滤默认回答
-        .slice(-12) // 只取最近的 6 轮对话
-        .map(msg => ({
-          role: msg.role,
-          content: msg.content
-        }))
+      // 如果刚刚切换了年龄段，使用空的历史对话（确保新年龄段风格生效）
+      let conversationHistory: Array<{ role: string; content: string }> = []
+      if (!shouldResetHistory) {
+        conversationHistory = chatMessages
+          .filter(msg => msg.content.trim().length > 0) // 过滤空消息
+          .filter(msg => !msg.content.includes('我的耳朵好像出小问题')) // 过滤默认回答
+          .filter(msg => !msg.isCuriosityQuestion) // 过滤继续探索问题
+          .filter(msg => !msg.isStageChange) // 过滤年龄段切换消息
+          .slice(-12) // 只取最近的 6 轮对话
+          .map(msg => ({
+            role: msg.role,
+            content: msg.content
+          }))
+      }
+
+      // 重置标志
+      if (shouldResetHistory) {
+        setShouldResetHistory(false)
+      }
 
       console.log('========== 构建的对话历史 ==========')
       conversationHistory.forEach((msg, index) => {
@@ -1067,12 +1111,20 @@ const Index = () => {
       // 清除引用，避免播放探索问题结束后再次触发
       currentPlayingMessageRef.current = null
 
-      // 直接播放问题，不需要使用 messageId（避免和回答的播放状态冲突）
-      await voiceService.playText(question, `${parentMessageId}_curiosity_0`)
+      // 将「继续探索」问题添加到对话历史（仅用于语音回应时的上下文）
+      // 标记为 isCuriosityQuestion，这样渲染时可以跳过显示
+      const curiosityMessage: ChatMessage = {
+        id: `${parentMessageId}_curiosity`,
+        role: 'assistant', // AI 提出的引导性问题
+        content: question,
+        timestamp: new Date().toISOString(),
+        isCuriosityQuestion: true // 标记为继续探索问题
+      }
+      setChatMessages(prev => [...prev, curiosityMessage])
+      console.log('=== 已添加继续探索问题到对话历史 ===', question)
 
-      // 播放完成后，将第一个继续探索问题自动填入输入框
-      // 注意：这里不自动提交，而是让用户确认后再提交
-      setQuestion(question)
+      // 直接播放问题
+      await voiceService.playText(question, `${parentMessageId}_curiosity_0`)
 
       // 提示用户
       setTimeout(() => {
@@ -1228,12 +1280,20 @@ const Index = () => {
         ) : (
           // 显示对话
           <>
-            {chatMessages.map((message) => (
+            {chatMessages
+              .filter(msg => !msg.isCuriosityQuestion) // 过滤掉「继续探索」问题，不在对话框显示
+              .map((message) => (
               <View
                 key={message.id}
                 className={`chat-message ${message.role}`}
               >
-                {message.role === 'user' ? (
+                {message.isStageChange ? (
+                  // 年龄段切换消息
+                  <View className="message-stage-change">
+                    <Text className="stage-change-icon">✨</Text>
+                    <Text className="stage-change-text">{message.content}</Text>
+                  </View>
+                ) : message.role === 'user' ? (
                   // 用户消息
                   <View className="message-user">
                     <Text className="message-content">{message.content}</Text>
@@ -1302,7 +1362,8 @@ const Index = () => {
                             <View className="curiosity-section">
                               <Text className="curiosity-title">继续探索：</Text>
                               <View className="curiosity-list">
-                                {message.curiosityQuestions.map((q, index) => (
+                                {/* 只显示第一个问题 */}
+                                {message.curiosityQuestions.slice(0, 1).map((q, index) => (
                                   <View
                                     key={index}
                                     className="curiosity-item"

@@ -29,24 +29,11 @@ export interface Answer {
 
 // 孩子分析结果
 export interface ChildAnalysis {
-  childName: string
-  childAge: number
-  totalQuestions: number
-  interestTopics: string[]
-  personalityTraits: string[]
-  learningStyle: string
-  suggestions: string[]
+  rawAnalysis: string  // AI 的原始分析文本
+  recommendations: Recommendation[]  // 推荐内容
 }
 
 // 推荐内容类型
 export interface Recommendation {
-  id: string
-  type: 'book' | 'animation' | 'game' | 'video'
-  title: string
-  description: string
-  ageRange: string
-  coverImage?: string
-  tags: string[]
-  relatedTopics: string[]
-  rating?: number
+  rawAnalysis: string  // AI 对该推荐内容的分析
 }

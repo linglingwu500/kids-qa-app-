@@ -44,7 +44,7 @@ let REALTIME_CONFIG: {
   appId: '',
   accessKey: '',
   resourceId: 'volc.speech.dialog',
-  appKey: 'PlgvMymc7f3tQnJ6',
+  appKey: '',
 
   // 音频配置
   audio: {
