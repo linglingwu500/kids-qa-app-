@@ -1,0 +1,17 @@
+<svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- 键盘外框 -->
+  <rect x="6" y="10" width="36" height="28" rx="4" stroke="#adb5bd" stroke-width="2.5" fill="none"/>
+  <!-- 第一排按键 -->
+  <rect x="10" y="15" width="5" height="4" rx="1" fill="#adb5bd"/>
+  <rect x="18" y="15" width="5" height="4" rx="1" fill="#adb5bd"/>
+  <rect x="26" y="15" width="5" height="4" rx="1" fill="#adb5bd"/>
+  <rect x="34" y="15" width="4" height="4" rx="1" fill="#adb5bd"/>
+  <!-- 第二排按键 -->
+  <rect x="10" y="22" width="5" height="4" rx="1" fill="#adb5bd"/>
+  <rect x="18" y="22" width="5" height="4" rx="1" fill="#adb5bd"/>
+  <rect x="26" y="22" width="5" height="4" rx="1" fill="#adb5bd"/>
+  <rect x="34" y="22" width="4" height="4" rx="1" fill="#adb5bd"/>
+  <!-- 第三排按键 -->
+  <rect x="10" y="29" width="14" height="4" rx="1" fill="#adb5bd"/>
+  <rect x="26" y="29" width="12" height="4" rx="1" fill="#adb5bd"/>
+</svg>

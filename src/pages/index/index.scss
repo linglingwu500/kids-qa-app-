@@ -553,30 +553,84 @@
   }
 }
 
+/* 输入模式切换按钮 - 圆角矩形，在语音按钮内部 */
 .input-mode-toggle {
   position: absolute;
-  top: 50%;
-  right: 16px;
-  transform: translateY(-50%);
-  padding: 8px;
-  border-radius: 50%;
-  transition: all 0.2s ease;
-  color: #adb5bd;
+  top: 20px;  /* 上边距：20px */
+  right: 20px;  /* 右边距：20px */
+  width: 64px;  /* 宽度 */
+  height: 88px; /* 高度：128 - 20(上) - 20(下) = 88px (包含3px双边框) */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fff;
+  border: 3px solid #adb5bd; /* 灰色边框 */
+  border-radius: 14px; /* 圆角矩形 */
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  color: #adb5bd; /* 灰色 */
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(173, 181, 189, 0.2);
+  z-index: 1; /* 确保在语音按钮上层 */
 
   &:active {
-    background: rgba(107, 163, 245, 0.08);
+    transform: scale(0.94);
+    background: #f8f9fa;
+    border-color: #6ba3f5; /* 点击时变蓝色 */
+    color: #6ba3f5;
+    box-shadow: 0 2px 6px rgba(107, 163, 245, 0.2);
   }
 }
 
+.icon-image {
+  width: 40px;
+  height: 40px;
+  display: block;
+}
+
+.icon-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.custom-icon {
+  width: 48px;
+  height: 48px;
+  color: currentColor;
+}
+
+.toggle-icon-image {
+  width: 36px;
+  height: 36px;
+  display: block;
+}
+
+.toggle-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+
+  .icon-image {
+    width: 40px;
+    height: 40px;
+  }
+}
+
+/* 语音输入区域 - 扁平简洁设计 */
+/* 语音输入区域 - 蓝粉渐变设计 */
 .voice-input-wrapper {
   flex: 1;
   display: flex;
   align-items: center;
-  background: linear-gradient(90deg, #6ba3f5, #f8b4d9);
-  border: 2px solid #f8b4d9;
-  border-radius: 24px;
+  position: relative; /* 添加相对定位，使内部的绝对定位按钮相对于此元素 */
+  background: linear-gradient(135deg, #6ba3f5 0%, #f8b4d9 100%);
+  border: none;
+  border-radius: 40px;
   overflow: hidden;
-  min-height: 80px;
+  height: 128px; /* 原来的2倍：64px × 2 = 128px */
+  transition: all 0.2s ease;
+  box-shadow: 0 6px 16px rgba(107, 163, 245, 0.3);
 }
 
 .voice-input-content {
@@ -589,12 +643,12 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 12px;
-  min-height: 80px;
+  gap: 16px; /* 增加间距 */
+  min-height: 128px; /* 与按钮高度一致 */
 }
 
 .recognition-icon {
-  font-size: 36px;
+  font-size: 44px; /* 增大 */
   animation: spin 1s linear infinite;
 }
 
@@ -607,27 +661,28 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
+  gap: 16px; /* 增加间距 */
 }
 
-/* 波形动画容器 */
+/* 波形动画容器 - 白色设计 */
 .waveform-container {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  height: 60px;
-  margin-bottom: 8px;
+  gap: 5px;
+  height: 70px; /* 增加高度 */
+  margin-bottom: 12px;
 }
 
 .wave-bar {
-  width: 4px;
-  background: rgba(255, 255, 255, 0.7);
-  border-radius: 2px;
+  width: 5px; /* 稍微加宽 */
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 3px;
   transition: height 0.1s ease;
 
   &.active {
     animation: wave 0.5s ease-in-out infinite alternate;
+    background: rgba(255, 255, 255, 0.9);
   }
 }
 
@@ -637,7 +692,8 @@
 }
 
 .recording-icon {
-  font-size: 40px;
+  font-size: 44px; /* 增大 */
+  filter: none;
   animation: recording-pulse 1.5s ease-in-out infinite;
 }
 
@@ -648,21 +704,25 @@
   }
   50% {
     transform: scale(1.1);
-    opacity: 0.85;
+    opacity: 0.95;
   }
 }
 
 .recording-text {
-  font-size: 22px;
+  font-size: 26px; /* 增大 */
   color: #fff;
   font-weight: 600;
+  letter-spacing: 0.5px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
 .recording-time {
-  font-size: 32px;
+  font-size: 36px; /* 增大 */
   color: #fff;
-  font-weight: bold;
+  font-weight: 700;
   font-family: monospace;
+  letter-spacing: 1px;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
 .recording-buttons {
@@ -730,13 +790,20 @@
   }
 }
 
+/* 按住说话 - 蓝粉渐变配白色icon */
 .voice-prompt {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 12px;
-  padding: 12px;
+  padding: 16px 24px;
+  width: 100%;
   cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:active {
+    background: rgba(255, 255, 255, 0.15);
+  }
 
   &::after {
     border: none;
@@ -744,13 +811,43 @@
 }
 
 .voice-prompt-icon {
-  font-size: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 44px;
+  filter: none;
+
+  .icon-image {
+    width: 56px;
+    height: 56px;
+  }
+
+  .custom-icon {
+    width: 56px;
+    height: 56px;
+    color: #fff;
+  }
+}
+
+.voice-prompt-icon-image {
+  width: 48px;
+  height: 48px;
+  display: block;
+}
+
+.voice-prompt-image {
+  width: 48px;
+  height: 48px;
+  display: block;
 }
 
 .voice-prompt-text {
-  font-size: 22px;
+  font-size: 24px; /* 增大文字 */
   color: #fff;
   font-weight: 600;
+  letter-spacing: 0.5px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
 .question-input {
@@ -950,32 +1047,33 @@
   }
 }
 
-/* 家长入口 */
+/* 家长入口 - 与语音按钮等高 */
 .parent-entry {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 14px;
-  background: #fff;
-  border: 2px solid #f8b4d9;
-  border-radius: 18px;
+  justify-content: center;
+  width: 128px; /* 与高度一致，保持圆形 */
+  height: 128px; /* 与语音按钮高度一致 */
+  background: linear-gradient(135deg, #f8b4d9 0%, #6ba3f5 100%); /* 反向渐变 */
+  border: none;
+  border-radius: 50%;
   margin-right: 16px;
-  transition: all 0.2s ease;
-  box-shadow: 0 2px 8px rgba(248, 180, 217, 0.12);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  flex-shrink: 0;
+  box-shadow: 0 4px 12px rgba(248, 180, 217, 0.3);
 
   &:active {
     transform: scale(0.95);
-    background: rgba(248, 180, 217, 0.04);
+    box-shadow: 0 2px 8px rgba(248, 180, 217, 0.2);
   }
 }
 
 .parent-entry-icon {
-  font-size: 32px;
-  margin-bottom: 4px;
+  font-size: 52px; /* 增大图标以匹配更大的按钮 */
+  margin-bottom: 0;
 }
 
 .parent-entry-text {
-  font-size: 18px;
-  color: #f8b4d9;
-  font-weight: 600;
+  display: none; /* 隐藏文字，只保留图标 */
 }

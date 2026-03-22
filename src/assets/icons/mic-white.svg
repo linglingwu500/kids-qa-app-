@@ -1,0 +1,10 @@
+<svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- 麦克风头 -->
+  <rect x="17" y="6" width="14" height="22" rx="7" stroke="#ffffff" stroke-width="2.5" fill="none"/>
+  <!-- 麦克风支架 -->
+  <path d="M12 22C12 30 15 34 24 34C33 34 36 30 36 22" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+  <!-- 麦克风底座竖线 -->
+  <line x1="24" y1="34" x2="24" y2="42" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- 底座横线 -->
+  <line x1="18" y1="42" x2="30" y2="42" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round"/>
+</svg>

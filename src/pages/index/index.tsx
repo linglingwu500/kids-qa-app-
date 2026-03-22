@@ -1,11 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { View, Text, Textarea, Button, ScrollView, Canvas } from '@tarojs/components'
+import { View, Text, Textarea, Button, ScrollView, Canvas, Image } from '@tarojs/components'
 import Taro, { useRouter } from '@tarojs/taro'
 import { getChildInfo, saveQuestion, updateQuestionWithAnswer } from '../../store/child'
 import { generateChildFriendlyAnswer } from '../../services/ai'
 import { formatRelativeTime } from '../../utils/format'
 import { voiceService, ASRResult } from '../../services/voice'
 import { type ASRResult as RealtimeASRResult, type ChatResult, type TTSResult as RealtimeTTSResult } from '../../services/doubao-realtime'
+import micIcon from '../../assets/icons/mic.svg'
+import micWhiteIcon from '../../assets/icons/mic-white.svg'
+import keyboardIcon from '../../assets/icons/keyboard.svg'
 import './index.scss'
 
 // 认知发展阶段
@@ -1449,13 +1452,13 @@ const Index = () => {
                   onTouchMove={handleVoiceTouchMove}
                   onTouchEnd={handleVoiceTouchEnd}
                 >
-                  <Text className="voice-prompt-icon">🎙️</Text>
+                  <Image className="voice-prompt-icon-image" src={micWhiteIcon} />
                   <Text className="voice-prompt-text">按住说话</Text>
                 </View>
               )}
             </View>
             <View className="input-mode-toggle" onClick={handleToggleInputMode}>
-              <Text className="toggle-icon">⌨️</Text>
+              <Image className="icon-image" src={keyboardIcon} />
             </View>
           </View>
         ) : (
@@ -1476,7 +1479,7 @@ const Index = () => {
               <Text className="char-count">{question.length}/500</Text>
             )}
             <View className="input-mode-toggle" onClick={handleToggleInputMode}>
-              <Text className="toggle-icon">🎙️</Text>
+              <Image className="icon-image" src={micIcon} />
             </View>
           </View>
         )}
