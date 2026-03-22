@@ -268,13 +268,24 @@ export async function analyzeChildInterests(
 根据孩子的问题分析兴趣和特点：
 ${questions.map((q, i) => `${i + 1}. ${q.content}`).join('\n')}
 
-请分析以下内容：
-1. 孩子的兴趣领域（从问题中发现孩子对哪些主题感兴趣）
-2. 孩子的性格特点（通过提问方式展现出的特质）
-3. 孩子的学习风格（如何探索和理解新知识）
-4. 给家长的建议（如何更好地支持和引导孩子）
+请按以下格式进行分析：
 
-请用温暖、鼓励的语气，给家长一个全面的分析。
+【兴趣领域】
+概述：（用1-2句话总结孩子的整体兴趣特点）
+
+核心兴趣：
+- 列出3-5个孩子最感兴趣的主题
+
+延伸兴趣：
+- 列出2-3个与核心兴趣相关的延伸主题
+
+特点：
+- 列出2-3个孩子兴趣探索的特点
+
+【性格特点】
+- 列出3-5点孩子的性格特点，每点用一句话描述
+
+请用温暖、专业的语气进行分析。
 `
 
     console.log('=== 开始分析孩子兴趣 ===')
@@ -291,7 +302,7 @@ ${questions.map((q, i) => `${i + 1}. ${q.content}`).join('\n')}
         messages: [
           {
             role: 'system',
-            content: '你是一位儿童教育专家，通过问题分析孩子的兴趣和特点。你的分析应该温暖、专业，给家长实用的建议。'
+            content: '你是一位儿童教育专家，善于通过孩子的问题分析其兴趣领域和性格特点。'
           },
           {
             role: 'user',
@@ -305,21 +316,177 @@ ${questions.map((q, i) => `${i + 1}. ${q.content}`).join('\n')}
 
     // 解析响应（OpenAI 兼容格式）
     const rawAnalysis = response.choices[0].message?.content || ''
-    console.log('=== AI返回的分析内容 ===')
-    console.log(rawAnalysis)
+    console.log('=== AI返回的分析内容（原始）===')
+    console.log('完整内容:', rawAnalysis)
+    console.log('内容长度:', rawAnalysis.length)
 
-    // 返回原始分析文本
+    // 解析分析内容
+    const parsed = parseAnalysisContent(rawAnalysis)
+
+    console.log('=== 解析后的兴趣领域 ===')
+    console.log('概述:', parsed.interestAnalysis.overview)
+    console.log('核心兴趣:', parsed.interestAnalysis.coreInterests)
+    console.log('延伸兴趣:', parsed.interestAnalysis.extendedInterests)
+    console.log('特点:', parsed.interestAnalysis.characteristics)
+
+    console.log('=== 解析后的性格特点 ===')
+    console.log('性格特点:', parsed.personalityTraits)
+
     return {
       rawAnalysis,
+      ...parsed,
       recommendations: []
     }
   } catch (error) {
     console.error('分析孩子兴趣失败:', error)
     return {
       rawAnalysis: '抱歉，分析暂时无法完成，请稍后再试。',
+      interestAnalysis: {
+        overview: '暂时无法获取',
+        coreInterests: [],
+        extendedInterests: [],
+        characteristics: []
+      },
+      personalityTraits: [],
       recommendations: []
     }
   }
+}
+
+/**
+ * 解析分析内容
+ * 优先解析兴趣领域，然后解析性格特点
+ */
+function parseAnalysisContent(content: string) {
+  console.log('========== 开始解析分析内容 ==========')
+  console.log('原始内容:', content)
+
+  // 结果对象
+  const result = {
+    interestAnalysis: {
+      overview: '孩子对多个领域都表现出好奇心',
+      coreInterests: [] as string[],
+      extendedInterests: [] as string[],
+      characteristics: [] as string[]
+    },
+    personalityTraits: [] as string[]
+  }
+
+  // ==================== 1. 解析兴趣领域部分 ====================
+  // 匹配到性格特点或结尾
+  const interestSectionMatch = content.match(/【兴趣领域】[\s\S]*?(?=(?:【性格特点】|给您的|希望这份|$))/)
+
+  if (interestSectionMatch) {
+    const interestSection = interestSectionMatch[0]
+    console.log('✓ 提取到兴趣领域部分, 长度:', interestSection.length)
+
+    // 1.1 解析概述 - 支持 ** 加粗标记
+    const overviewMatch = interestSection.match(/\*{0,2}概述[:：]\s*\*{0,2}\s*([\s\S]+?)\n\s*\*{0,2}(?:核心兴趣|延伸兴趣|特点|【)/)
+    if (overviewMatch) {
+      result.interestAnalysis.overview = overviewMatch[1].trim().replace(/\n+/g, ' ')
+      console.log('✓ 概述:', result.interestAnalysis.overview)
+    } else {
+      console.log('✗ 概述匹配失败')
+    }
+
+    // 1.2 解析核心兴趣
+    const coreMatch = interestSection.match(/\*{0,2}核心兴趣[:：]\s*\*{0,2}\s*\n([\s\S]+?)\n\s*\*{0,2}(?:延伸兴趣|特点|【)/)
+    if (coreMatch) {
+      result.interestAnalysis.coreInterests = extractListItems(coreMatch[1])
+      console.log('✓ 核心兴趣:', result.interestAnalysis.coreInterests)
+    } else {
+      console.log('✗ 核心兴趣匹配失败')
+    }
+
+    // 1.3 解析延伸兴趣
+    const extendedMatch = interestSection.match(/\*{0,2}延伸兴趣[:：]\s*\*{0,2}\s*\n([\s\S]+?)\n\s*\*{0,2}(?:特点|【)/)
+    if (extendedMatch) {
+      result.interestAnalysis.extendedInterests = extractListItems(extendedMatch[1])
+      console.log('✓ 延伸兴趣:', result.interestAnalysis.extendedInterests)
+    } else {
+      console.log('✗ 延伸兴趣匹配失败')
+    }
+
+    // 1.4 解析特点
+    const characteristicsMatch = interestSection.match(/\*{0,2}特点[:：]\s*\*{0,2}\s*\n([\s\S]+?)(?:\n\s*\*{0,2}【|$)/)
+    if (characteristicsMatch) {
+      result.interestAnalysis.characteristics = extractListItems(characteristicsMatch[1])
+      console.log('✓ 特点:', result.interestAnalysis.characteristics)
+    } else {
+      console.log('✗ 特点匹配失败')
+    }
+  } else {
+    console.log('✗ 兴趣领域部分匹配失败')
+  }
+
+  // ==================== 2. 解析性格特点部分 ====================
+  const personalitySectionMatch = content.match(/【性格特点】\s*([\s\S]*?)(?=\n\s*(?:给您的|希望这份)|$)/)
+
+  if (personalitySectionMatch) {
+    const personalityText = personalitySectionMatch[1].trim()
+    result.personalityTraits = extractListItems(personalityText)
+    console.log('✓ 性格特点:', result.personalityTraits)
+  } else {
+    console.log('✗ 性格特点匹配失败，尝试直接提取')
+    // 备用方案：直接提取所有列表项
+    const personalitySectionMatch2 = content.match(/【性格特点】[\s\S]*?$/)
+    if (personalitySectionMatch2) {
+      const personalityText = personalitySectionMatch2[0]
+        .replace(/【性格特点】\s*/, '')
+        .replace(/\n\s*(?:给您的温馨建议|希望这份)[\s\S]+$/, '') // 移除结尾建议
+        .trim()
+      result.personalityTraits = extractListItems(personalityText)
+      console.log('✓ 性格特点(备用):', result.personalityTraits)
+    }
+  }
+
+  console.log('========== 解析完成 ==========')
+
+  return result
+}
+
+/**
+ * 提取列表项 - 支持多种格式
+ * 过滤无意义内容（如 --, ###, 空内容等）
+ */
+function extractListItems(text: string): string[] {
+  if (!text || text.trim().length === 0) {
+    return []
+  }
+
+  console.log('  提取列表项, 输入前150字符:', text.substring(0, 150))
+
+  // 按行分割
+  const lines = text.split(/\n/).map(line => line.trim()).filter(line => line.length > 0)
+
+  const items: string[] = []
+
+  for (const line of lines) {
+    // 移除列表标记和 Markdown 格式
+    let cleaned = line
+      .replace(/^\*{1,2}/, '')              // 移除开头的 ** 或 *
+      .replace(/\*{1,2}$/, '')              // 移除结尾的 ** 或 *
+      .replace(/^\d+[\.\、\s]+/, '')        // 1. 或 1、
+      .replace(/^[-•·▪●]\s*/, '')            // - • · ▪ ●
+      .trim()
+
+    // 过滤条件：
+    // 1. 内容长度 > 0
+    // 2. 不是纯符号（如 ---, ###, ***）
+    // 3. 不是标题行
+    // 4. 不是建议部分的开头
+    const isMeaningful = cleaned.length > 0 &&
+                         !cleaned.match(/^[-=#*]{3,}$/) &&  // 不是 ---, ###, ***
+                         !cleaned.match(/^(?:核心兴趣|延伸兴趣|特点|性格特点|兴趣领域|概述)/) &&
+                         !cleaned.match(/^(?:给您的|希望|温馨建议)/)
+
+    if (isMeaningful) {
+      items.push(cleaned)
+    }
+  }
+
+  console.log('  提取结果:', items)
+  return items
 }
 
 /**
@@ -328,7 +495,7 @@ ${questions.map((q, i) => `${i + 1}. ${q.content}`).join('\n')}
 export async function getRecommendations(
   questions: Array<{ content: string; createdAt: string }>,
   childAge: number
-): Promise<{ rawAnalysis: string }[]> {
+): Promise<any[]> {
   try {
     // 提取最近的5个问题作为参考
     const recentQuestions = questions.slice(-5).map(q => q.content)
@@ -337,11 +504,33 @@ export async function getRecommendations(
 孩子今年${childAge}岁，最近问了这些问题：
 ${recentQuestions.map((q, i) => `${i + 1}. ${q}`).join('\n')}
 
-请根据孩子的提问内容，分析孩子的兴趣点，并推荐相关的内容：
+请根据孩子的提问内容，分析孩子的兴趣点，并推荐相关的内容。请按以下格式推荐：
 
-1. **书籍推荐**：1-2本与孩子提问主题相关的儿童书籍，说明书名、适合年龄、推荐理由
-2. **动画片推荐**：1-2部与孩子兴趣相关的动画片，说明片名、适合年龄、推荐理由
-3. **儿童电影推荐**：1部适合的电影，说明片名、适合年龄、推荐理由
+【书籍推荐】
+概述：（用1-2句话说明书籍推荐的整体方向）
+推荐1：《书名》
+- 推荐理由：详细的推荐说明
+- 适合年龄：X-Y岁
+
+推荐2：《书名》
+- 推荐理由：详细的推荐说明
+- 适合年龄：X-Y岁
+
+【动画片推荐】
+概述：（用1-2句话说明动画片推荐的整体方向）
+推荐1：《片名》
+- 推荐理由：详细的推荐说明
+- 适合年龄：X-Y岁
+
+推荐2：《片名》
+- 推荐理由：详细的推荐说明
+- 适合年龄：X-Y岁
+
+【儿童电影推荐】
+概述：（用1-2句话说明电影推荐的整体方向）
+推荐1：《片名》
+- 推荐理由：详细的推荐说明
+- 适合年龄：X-Y岁
 
 请用温暖、专业的语气，给出详细的推荐理由，帮助家长选择与孩子兴趣高度相关的优质内容。
 `
@@ -365,21 +554,144 @@ ${recentQuestions.map((q, i) => `${i + 1}. ${q}`).join('\n')}
           }
         ],
         temperature: 0.7,
-        max_tokens: 1500
+        max_tokens: 2000
       }
     })
 
     // 解析响应（OpenAI 兼容格式）
     const rawAnalysis = response.choices[0].message?.content || ''
     console.log('=== AI返回的推荐内容 ===')
-    console.log(rawAnalysis)
+    console.log('原始内容长度:', rawAnalysis.length)
+    console.log('原始内容:', rawAnalysis)
 
-    // 返回包含原始 AI 分析的推荐
-    return [{ rawAnalysis }]
+    // 解析推荐内容
+    const parsed = parseRecommendations(rawAnalysis, childAge)
+
+    return parsed
   } catch (error) {
     console.error('获取推荐失败:', error)
-    return [{ rawAnalysis: '抱歉，暂时无法获取推荐内容，请稍后再试。' }]
+    return []
   }
+}
+
+/**
+ * 解析推荐内容
+ */
+function parseRecommendations(content: string, childAge: number): any[] {
+  const recommendations = []
+
+  // 解析书籍推荐
+  const bookSection = content.match(/【书籍推荐】([\s\S]*?)(?=【动画片推荐】|【儿童电影推荐】|$)/)
+  if (bookSection) {
+    const sectionContent = bookSection[1]
+
+    // 提取概述
+    const overviewMatch = sectionContent.match(/概述[:：]\s*([^\n]+)/)
+    const bookOverview = overviewMatch ? overviewMatch[1].trim() : '根据孩子兴趣精选的优质书籍'
+
+    const bookItems: any[] = []
+
+    // 查找所有推荐项（以"推荐"开头或以《开头）
+    const itemMatches = sectionContent.match(/(?:推荐\d*[:：])?\s*《(.+?)》[\s\S]*?推荐理由[:：]\s*([^\n]+)[\s\S]*?适合年龄[:：]\s*([^\n]+)/g)
+
+    if (itemMatches) {
+      itemMatches.forEach(item => {
+        const titleMatch = item.match(/《(.+?)》/)
+        const reasonMatch = item.match(/推荐理由[:：]\s*(.+)/)
+        const ageMatch = item.match(/适合年龄[:：]\s*(.+)/)
+
+        if (titleMatch && reasonMatch && ageMatch) {
+          bookItems.push({
+            title: titleMatch[1].trim(),
+            description: reasonMatch[1].trim(),
+            suitableAge: ageMatch[1].trim()
+          })
+        }
+      })
+    }
+
+    recommendations.push({
+      type: 'book',
+      overview: bookOverview,
+      items: bookItems.length > 0 ? bookItems : [{ title: '推荐内容生成中...', description: '稍后更新', suitableAge: `${childAge}岁` }]
+    })
+  }
+
+  // 解析动画片推荐
+  const animationSection = content.match(/【动画片推荐】([\s\S]*?)(?=【儿童电影推荐】|$)/)
+  if (animationSection) {
+    const sectionContent = animationSection[1]
+
+    const overviewMatch = sectionContent.match(/概述[:：]\s*([^\n]+)/)
+    const animationOverview = overviewMatch ? overviewMatch[1].trim() : '根据孩子兴趣精选的优质动画片'
+
+    const animationItems: any[] = []
+    const itemMatches = sectionContent.match(/(?:推荐\d*[:：])?\s*《(.+?)》[\s\S]*?推荐理由[:：]\s*([^\n]+)[\s\S]*?适合年龄[:：]\s*([^\n]+)/g)
+
+    if (itemMatches) {
+      itemMatches.forEach(item => {
+        const titleMatch = item.match(/《(.+?)》/)
+        const reasonMatch = item.match(/推荐理由[:：]\s*(.+)/)
+        const ageMatch = item.match(/适合年龄[:：]\s*(.+)/)
+
+        if (titleMatch && reasonMatch && ageMatch) {
+          animationItems.push({
+            title: titleMatch[1].trim(),
+            description: reasonMatch[1].trim(),
+            suitableAge: ageMatch[1].trim()
+          })
+        }
+      })
+    }
+
+    recommendations.push({
+      type: 'animation',
+      overview: animationOverview,
+      items: animationItems.length > 0 ? animationItems : [{ title: '推荐内容生成中...', description: '稍后更新', suitableAge: `${childAge}岁` }]
+    })
+  }
+
+  // 解析电影推荐
+  const movieSection = content.match(/【儿童电影推荐】([\s\S]*?)$/)
+  if (movieSection) {
+    const sectionContent = movieSection[1]
+
+    const overviewMatch = sectionContent.match(/概述[:：]\s*([^\n]+)/)
+    const movieOverview = overviewMatch ? overviewMatch[1].trim() : '根据孩子兴趣精选的优质儿童电影'
+
+    const movieItems: any[] = []
+    const itemMatches = sectionContent.match(/(?:推荐\d*[:：])?\s*《(.+?)》[\s\S]*?推荐理由[:：]\s*([^\n]+)[\s\S]*?适合年龄[:：]\s*([^\n]+)/g)
+
+    if (itemMatches) {
+      itemMatches.forEach(item => {
+        const titleMatch = item.match(/《(.+?)》/)
+        const reasonMatch = item.match(/推荐理由[:：]\s*(.+)/)
+        const ageMatch = item.match(/适合年龄[:：]\s*(.+)/)
+
+        if (titleMatch && reasonMatch && ageMatch) {
+          movieItems.push({
+            title: titleMatch[1].trim(),
+            description: reasonMatch[1].trim(),
+            suitableAge: ageMatch[1].trim()
+          })
+        }
+      })
+    }
+
+    recommendations.push({
+      type: 'movie',
+      overview: movieOverview,
+      items: movieItems.length > 0 ? movieItems : [{ title: '推荐内容生成中...', description: '稍后更新', suitableAge: `${childAge}岁` }]
+    })
+  }
+
+  console.log('=== 解析推荐结果 ===')
+  console.log('推荐数量:', recommendations.length)
+  recommendations.forEach((rec, i) => {
+    console.log(`推荐 ${i + 1}:`, rec.type, '项目数:', rec.items?.length)
+  })
+
+  return recommendations
 }
 
 // 解析分析响应

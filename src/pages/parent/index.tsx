@@ -14,11 +14,29 @@ const Parent = () => {
   const [interestAnalysis, setInterestAnalysis] = useState<ChildAnalysis | null>(null)
   const [recommendations, setRecommendations] = useState<Recommendation[]>([])
   const [isAnalyzing, setIsAnalyzing] = useState(false)
+  const [lastAnalysisQuestionCount, setLastAnalysisQuestionCount] = useState(0) // 记录上次分析时的问题数量
+
+  // 清理文本中的 Markdown 加粗标记 **，并返回清理后的文本
+  const cleanMarkdownBold = (text: string): string => {
+    return text.replace(/\*\*/g, '')
+  }
+
+  // 过滤掉无意义的列表项（如纯符号、空内容等）
+  const filterValidItems = (items: string[]): string[] => {
+    return items.filter(item => {
+      const trimmed = item.trim()
+      // 过滤：空内容、纯符号（---, ###）、只有冒号的项
+      return trimmed.length > 0 &&
+             !trimmed.match(/^[-=#*•·]{2,}$/) &&
+             !trimmed.match(/^[:：]+$/)
+    })
+  }
 
   // 加载问题历史
   useEffect(() => {
     try {
       loadQuestions()
+      loadSavedAnalysis() // 加载保存的分析结果
     } catch (error) {
       console.error('加载问题失败:', error)
     }
@@ -33,6 +51,32 @@ const Parent = () => {
       console.error('刷新数据失败:', error)
     }
   }, [])
+
+  // 加载保存的分析结果
+  const loadSavedAnalysis = () => {
+    try {
+      const savedAnalysis = Taro.getStorageSync('child_interest_analysis')
+      const savedRecommendations = Taro.getStorageSync('child_recommendations')
+      const savedQuestionCount = Taro.getStorageSync('last_analysis_question_count')
+
+      if (savedAnalysis) {
+        console.log('加载保存的分析结果:', savedAnalysis)
+        setInterestAnalysis(savedAnalysis)
+      }
+
+      if (savedRecommendations && Array.isArray(savedRecommendations)) {
+        console.log('加载保存的推荐内容:', savedRecommendations)
+        setRecommendations(savedRecommendations)
+      }
+
+      if (savedQuestionCount) {
+        console.log('上次分析时的问题数量:', savedQuestionCount)
+        setLastAnalysisQuestionCount(savedQuestionCount)
+      }
+    } catch (error) {
+      console.error('加载保存的分析结果失败:', error)
+    }
+  }
 
   const loadQuestions = () => {
     const allQuestions = getAllQuestions()
@@ -61,6 +105,17 @@ const Parent = () => {
         childInfo?.age || 6
       )
       setRecommendations(recommendations)
+
+      // 保存分析结果到本地存储
+      try {
+        Taro.setStorageSync('child_interest_analysis', analysis)
+        Taro.setStorageSync('child_recommendations', recommendations)
+        Taro.setStorageSync('last_analysis_question_count', questions.length)
+        setLastAnalysisQuestionCount(questions.length)
+        console.log('分析结果已保存到本地存储，问题数量:', questions.length)
+      } catch (saveError) {
+        console.error('保存分析结果失败:', saveError)
+      }
 
       setActiveTab('analysis')
       Taro.showToast({ title: '分析完成', icon: 'success' })
@@ -158,32 +213,132 @@ const Parent = () => {
             </View>
           ) : (
             <>
-              {/* AI 分析结果 */}
-              {interestAnalysis.rawAnalysis && (
-                <View className="analysis-card">
-                  <Text className="card-title">🔍 AI 分析</Text>
-                  <Text className="analysis-text">{interestAnalysis.rawAnalysis}</Text>
-                </View>
-              )}
-
-              {/* 推荐内容 */}
-              {recommendations.length > 0 && recommendations[0].rawAnalysis && (
-                <View className="analysis-card">
-                  <Text className="card-title">📖 推荐内容</Text>
-                  <Text className="analysis-text">{recommendations[0].rawAnalysis}</Text>
-                </View>
-              )}
-
-              {/* 重新分析按钮 */}
+              {/* 重新分析部分（移到最前面） */}
               <View className="reanalyze-section">
+                {/* 新问题提示 */}
+                {questions.length > lastAnalysisQuestionCount && lastAnalysisQuestionCount > 0 && (
+                  <View className="new-questions-hint">
+                    <Text className="hint-icon">💡</Text>
+                    <Text className="hint-text">
+                      自上次分析以来，新增了 {questions.length - lastAnalysisQuestionCount} 个问题，点击重新分析可更新结果
+                    </Text>
+                  </View>
+                )}
+
                 <Button
                   className="reanalyze-button"
                   onClick={handleAnalyze}
                   disabled={isAnalyzing}
                 >
-                  重新分析
+                  {isAnalyzing ? '分析中...' : '重新分析'}
                 </Button>
               </View>
+
+              {/* 兴趣领域 */}
+              <View className="analysis-card">
+                <Text className="card-title">🌟 兴趣领域</Text>
+
+                {/* 概述 */}
+                {interestAnalysis.interestAnalysis?.overview && (
+                  <View className="interest-overview">
+                    <Text className="overview-label">概述</Text>
+                    <Text className="overview-text">{cleanMarkdownBold(interestAnalysis.interestAnalysis.overview)}</Text>
+                  </View>
+                )}
+
+                {/* 核心兴趣 */}
+                {interestAnalysis.interestAnalysis?.coreInterests && filterValidItems(interestAnalysis.interestAnalysis.coreInterests).length > 0 && (
+                  <View className="interest-section">
+                    <Text className="section-subtitle">🎯 核心兴趣</Text>
+                    <View className="interest-list">
+                      {filterValidItems(interestAnalysis.interestAnalysis.coreInterests).map((interest, index) => (
+                        <View key={index} className="interest-item">
+                          <Text className="interest-dot">•</Text>
+                          <Text className="interest-text interest-bold">{cleanMarkdownBold(interest)}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                )}
+
+                {/* 延伸兴趣 */}
+                {interestAnalysis.interestAnalysis?.extendedInterests && filterValidItems(interestAnalysis.interestAnalysis.extendedInterests).length > 0 && (
+                  <View className="interest-section">
+                    <Text className="section-subtitle">🌈 延伸兴趣</Text>
+                    <View className="interest-list">
+                      {filterValidItems(interestAnalysis.interestAnalysis.extendedInterests).map((interest, index) => (
+                        <View key={index} className="interest-item">
+                          <Text className="interest-dot">•</Text>
+                          <Text className="interest-text interest-bold">{cleanMarkdownBold(interest)}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                )}
+
+                {/* 特点 */}
+                {interestAnalysis.interestAnalysis?.characteristics && filterValidItems(interestAnalysis.interestAnalysis.characteristics).length > 0 && (
+                  <View className="interest-section">
+                    <Text className="section-subtitle">✨ 特点</Text>
+                    <View className="interest-list">
+                      {filterValidItems(interestAnalysis.interestAnalysis.characteristics).map((char, index) => (
+                        <View key={index} className="interest-item">
+                          <Text className="interest-dot">•</Text>
+                          <Text className="interest-text interest-bold">{cleanMarkdownBold(char)}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                )}
+              </View>
+
+              {/* 性格特点 */}
+              {interestAnalysis.personalityTraits && filterValidItems(interestAnalysis.personalityTraits).length > 0 && (
+                <View className="analysis-card">
+                  <Text className="card-title">🎭 性格特点</Text>
+                  <View className="personality-list">
+                    {filterValidItems(interestAnalysis.personalityTraits).map((trait, index) => (
+                      <View key={index} className="personality-item">
+                        <View className="personality-number">{index + 1}</View>
+                        <Text className="personality-text personality-bold">{cleanMarkdownBold(trait)}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              {/* 推荐内容 */}
+              {recommendations.length > 0 && recommendations.map((rec, recIndex) => (
+                <View key={recIndex} className="analysis-card">
+                  <Text className="card-title">
+                    {rec.type === 'book' ? '📚 书籍推荐' : rec.type === 'animation' ? '🎬 动画片推荐' : '🎞️ 儿童电影推荐'}
+                  </Text>
+
+                  {/* 概述 */}
+                  {rec.overview && (
+                    <View className="recommend-overview">
+                      <Text className="overview-label">概述</Text>
+                      <Text className="overview-text">{cleanMarkdownBold(rec.overview)}</Text>
+                    </View>
+                  )}
+
+                  {/* 推荐列表 */}
+                  {rec.items && rec.items.map((item: any, itemIndex: number) => (
+                    <View key={itemIndex} className="recommend-item">
+                      <View className="recommend-header">
+                        <Text className="recommend-title">《{cleanMarkdownBold(item.title)}》</Text>
+                        <View className="recommend-age-badge">
+                          <Text className="age-text">{cleanMarkdownBold(item.suitableAge)}</Text>
+                        </View>
+                      </View>
+                      <View className="recommend-reason">
+                        <Text className="reason-label">推荐理由：</Text>
+                        <Text className="reason-text">{cleanMarkdownBold(item.description)}</Text>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              ))}
             </>
           )}
         </ScrollView>

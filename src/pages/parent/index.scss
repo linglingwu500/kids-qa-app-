@@ -277,12 +277,190 @@
   display: block;
 }
 
-.analysis-text {
+.section-subtitle {
   font-size: 26px;
+  font-weight: 600;
+  color: #4a90e2;
+  margin: 20px 0 12px;
+  display: block;
+}
+
+/* 兴趣领域 */
+.interest-overview {
+  background: rgba(74, 144, 226, 0.05);
+  border-left: 4px solid #4a90e2;
+  padding: 16px;
+  border-radius: 10px;
+  margin-bottom: 16px;
+}
+
+.overview-label {
+  font-size: 22px;
+  font-weight: 600;
+  color: #4a90e2;
+  margin-bottom: 8px;
+  display: block;
+}
+
+.overview-text {
+  font-size: 24px;
   color: #555;
-  line-height: 1.8;
-  white-space: pre-wrap;
-  word-wrap: break-word;
+  line-height: 1.6;
+  display: block;
+}
+
+.interest-section {
+  margin-bottom: 20px;
+}
+
+.interest-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.interest-item {
+  display: flex;
+  align-items: flex-start;
+  padding: 10px 16px;
+  background: rgba(255, 193, 7, 0.06);
+  border-radius: 10px;
+}
+
+.interest-dot {
+  font-size: 24px;
+  color: #ffc107;
+  margin-right: 12px;
+  flex-shrink: 0;
+  font-weight: bold;
+}
+
+.interest-text {
+  font-size: 24px;
+  color: #555;
+  line-height: 1.5;
+  flex: 1;
+
+  &.interest-bold {
+    font-weight: 600;
+  }
+}
+
+/* 性格特点 */
+.personality-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.personality-item {
+  display: flex;
+  align-items: flex-start;
+  padding: 16px;
+  background: linear-gradient(135deg, rgba(255, 107, 157, 0.05), rgba(255, 157, 185, 0.05));
+  border-left: 4px solid #ff6b9d;
+  border-radius: 10px;
+}
+
+.personality-number {
+  width: 40px;
+  height: 40px;
+  background: linear-gradient(135deg, #ff6b9d, #ff9db9);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  font-weight: bold;
+  color: #fff;
+  margin-right: 16px;
+  flex-shrink: 0;
+}
+
+.personality-text {
+  font-size: 24px;
+  color: #555;
+  line-height: 1.6;
+  flex: 1;
+  padding-top: 4px;
+
+  &.personality-bold {
+    font-weight: 600;
+  }
+}
+
+/* 推荐内容 */
+.recommend-overview {
+  background: rgba(74, 144, 226, 0.05);
+  border-left: 4px solid #4a90e2;
+  padding: 16px;
+  border-radius: 10px;
+  margin-bottom: 20px;
+}
+
+.recommend-item {
+  background: rgba(255, 255, 255, 0.9);
+  border: 2px solid #e0e0e0;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.recommend-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  flex-wrap: wrap;  // 允许换行
+  gap: 8px;        // 换行时的间距
+}
+
+.recommend-title {
+  font-size: 26px;
+  font-weight: bold;
+  color: #333;
+  flex: 1;
+  min-width: 0;  // 允许文本正确换行
+  word-break: break-all;  // 长书名自动换行
+}
+
+.recommend-age-badge {
+  background: linear-gradient(135deg, #4a90e2, #6ab0f3);
+  padding: 6px 16px;
+  border-radius: 12px;
+  margin-left: auto;  // 靠右对齐
+  flex-shrink: 0;    // 不缩小
+}
+
+.age-text {
+  font-size: 20px;
+  color: #fff;
+  font-weight: 600;
+}
+
+.recommend-reason {
+  background: rgba(255, 193, 7, 0.05);
+  padding: 12px;
+  border-radius: 8px;
+}
+
+.reason-label {
+  font-size: 22px;
+  font-weight: 600;
+  color: #ffc107;
+  margin-bottom: 6px;
+  display: block;
+}
+
+.reason-text {
+  font-size: 22px;
+  color: #666;
+  line-height: 1.6;
   display: block;
 }
 
@@ -465,8 +643,33 @@
 }
 
 .reanalyze-section {
-  margin-top: 40px;
+  margin-bottom: 30px;  /* 改为下边距，因为现在在最前面 */
   text-align: center;
+}
+
+.new-questions-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, rgba(255, 193, 7, 0.15), rgba(255, 152, 0, 0.15));
+  border: 2px solid #ffc107;
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-bottom: 20px;
+  gap: 12px;
+}
+
+.hint-icon {
+  font-size: 28px;
+  flex-shrink: 0;
+}
+
+.hint-text {
+  font-size: 22px;
+  color: #f57c00;
+  line-height: 1.5;
+  text-align: left;
+  flex: 1;
 }
 
 .reanalyze-button {
