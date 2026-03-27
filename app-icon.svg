@@ -1,0 +1,160 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <!-- 背景圆形 -->
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#F0B8D1;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#D4A8CC;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#A8B8E8;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="bubbleGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#FFFFFF;stop-opacity:0.95" />
+      <stop offset="100%" style="stop-color:#F0F0F0;stop-opacity:0.9" />
+    </linearGradient>
+  </defs>
+
+  <!-- 主背景圆 -->
+  <circle cx="256" cy="256" r="256" fill="#FFFFFF" />
+
+  <!-- 大聊天气泡（蓝色） -->
+  <g transform="translate(120, 190)">
+    <path d="M 0 40 Q 0 0 40 0 L 200 0 Q 240 0 240 40 L 240 120 Q 240 160 200 160 L 70 160 L 30 195 L 40 160 L 40 160 Q 0 160 0 120 Z"
+          fill="#A8B8E8"
+          opacity="0.9"/>
+
+    <!-- 左眼 - 豆豆眼风格 -->
+    <circle cx="70" cy="68" r="10" fill="white"/>
+    <circle cx="70" cy="68" r="6" fill="#3A4A7E"/>
+    <circle cx="72" cy="65" r="2.5" fill="white"/>
+
+    <!-- 右眼 - 豆豆眼风格 -->
+    <circle cx="170" cy="68" r="10" fill="white"/>
+    <circle cx="170" cy="68" r="6" fill="#3A4A7E"/>
+    <circle cx="172" cy="65" r="2.5" fill="white"/>
+
+    <!-- 腮红 -->
+    <ellipse cx="55" cy="88" rx="16" ry="10" fill="#FFB8D1" opacity="0.7"/>
+    <ellipse cx="185" cy="88" rx="16" ry="10" fill="#FFB8D1" opacity="0.7"/>
+
+    <!-- 小小微笑嘴巴 -->
+    <path d="M 105 108 Q 120 118 135 108"
+          stroke="white"
+          stroke-width="5"
+          fill="none"
+          stroke-linecap="round"/>
+  </g>
+
+  <!-- 小聊天气泡（粉色） -->
+  <g transform="translate(260, 110)">
+    <!-- 气泡主体 -->
+    <path d="M 0 30 Q 0 0 30 0 L 140 0 Q 170 0 170 30 L 170 100 Q 170 130 140 130 L 30 130 Q 0 130 0 100 Z"
+          fill="#F0B8D1"
+          opacity="0.9"/>
+    <!-- 尾巴 -->
+    <path d="M 140 130 L 115 125 L 150 160 L 140 130 Z"
+          fill="#F0B8D1"
+          opacity="0.9"/>
+
+
+    <!-- 左眼 - 豆豆眼风格 -->
+    <circle cx="50" cy="53" r="8" fill="white"/>
+    <circle cx="50" cy="53" r="5" fill="#8A4A6E"/>
+    <circle cx="52" cy="50" r="2" fill="white"/>
+
+    <!-- 右眼 - 豆豆眼风格 -->
+    <circle cx="120" cy="53" r="8" fill="white"/>
+    <circle cx="120" cy="53" r="5" fill="#8A4A6E"/>
+    <circle cx="122" cy="50" r="2" fill="white"/>
+
+    <!-- 腮红 -->
+    <ellipse cx="38" cy="72" rx="12" ry="8" fill="#FFD4E5" opacity="0.7"/>
+    <ellipse cx="132" cy="72" rx="12" ry="8" fill="#FFD4E5" opacity="0.7"/>
+
+    <!-- 小小微笑嘴巴 -->
+    <path d="M 70 88 Q 85 98 100 88"
+          stroke="white"
+          stroke-width="4"
+          fill="none"
+          stroke-linecap="round"/>
+  </g>
+
+  <!-- 四角星形状定义 -->
+  <defs>
+    <path id="fourPointStar" d="M 30 0
+             C 35 15, 40 20, 55 25
+             C 40 30, 35 35, 30 50
+             C 25 35, 20 30, 5 25
+             C 20 20, 25 15, 30 0
+             Z"/>
+  </defs>
+
+  <!-- 好奇心图标 - 主四角星 -->
+  <g transform="translate(330, 265)">
+    <!-- 自然光晕 - 多层柔和光晕 -->
+    <g opacity="0.3">
+      <ellipse cx="30" cy="25" rx="50" ry="46" fill="url(#bgGradient)" opacity="0.35"/>
+      <ellipse cx="30" cy="25" rx="42" ry="38" fill="url(#bgGradient)" opacity="0.45"/>
+      <ellipse cx="30" cy="25" rx="34" ry="30" fill="url(#bgGradient)" opacity="0.55"/>
+    </g>
+
+    <!-- 主四角星 -->
+    <use href="#fourPointStar" fill="url(#bgGradient)" stroke="white" stroke-width="2.5"/>
+
+    <!-- 内部高光 - 增加立体感 -->
+    <ellipse cx="30" cy="20" rx="12" ry="10" fill="white" opacity="0.35"/>
+  </g>
+
+  <!-- 散布的小四角星群 -->
+  <!-- 左上区域 -->
+  <g transform="translate(80, 130) scale(0.9)">
+    <use href="#fourPointStar" fill="url(#bgGradient)" opacity="0.5"/>
+  </g>
+
+  <g transform="translate(50, 170) scale(0.55)">
+    <use href="#fourPointStar" fill="#F0B8D1" opacity="0.6"/>
+  </g>
+
+  <!-- 右上区域 -->
+  <g transform="translate(420, 120) scale(0.65)">
+    <use href="#fourPointStar" fill="#A8B8E8" opacity="0.55"/>
+  </g>
+
+  <g transform="translate(450, 160) scale(0.45)">
+    <use href="#fourPointStar" fill="url(#bgGradient)" opacity="0.5"/>
+  </g>
+
+  <!-- 中间区域 -->
+  <g transform="translate(280, 350) scale(0.4)">
+    <use href="#fourPointStar" fill="#F0B8D1" opacity="0.4"/>
+  </g>
+
+  <!-- 底部区域 -->
+  <g transform="translate(150, 410) scale(0.5)">
+    <use href="#fourPointStar" fill="#A8B8E8" opacity="0.45"/>
+  </g>
+
+  <g transform="translate(380, 430) scale(0.6)">
+    <use href="#fourPointStar" fill="url(#bgGradient)" opacity="0.5"/>
+  </g>
+
+  <g transform="translate(250, 450) scale(0.35)">
+    <use href="#fourPointStar" fill="#F0B8D1" opacity="0.35"/>
+  </g>
+
+  <!-- 气泡附近的小星星 -->
+  <g transform="translate(200, 310) scale(0.3)">
+    <use href="#fourPointStar" fill="#A8B8E8" opacity="0.4"/>
+  </g>
+
+  <g transform="translate(430, 330) scale(0.38)">
+    <use href="#fourPointStar" fill="#F0B8D1" opacity="0.45"/>
+  </g>
+
+  <!-- 闪烁的微小星光点 - 圆形点 -->
+  <circle cx="100" cy="210" r="3" fill="#F0B8D1" opacity="0.6"/>
+  <circle cx="420" cy="380" r="2" fill="url(#bgGradient)" opacity="0.4"/>
+  <circle cx="180" cy="380" r="2.5" fill="#F0B8D1" opacity="0.5"/>
+  <circle cx="120" cy="330" r="1.8" fill="url(#bgGradient)" opacity="0.45"/>
+  <circle cx="400" cy="230" r="2.2" fill="#F0B8D1" opacity="0.55"/>
+  <circle cx="280" cy="410" r="1.5" fill="#A8B8E8" opacity="0.35"/>
+
+</svg>

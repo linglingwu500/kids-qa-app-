@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>气泡尾巴说明</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 40px;
+            background: #f5f5f5;
+        }
+        .explanation {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        h1 { color: #333; margin-bottom: 20px; }
+        h2 { color: #667eea; margin-top: 30px; }
+        .tail-info {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 15px 0;
+            border-left: 4px solid #667eea;
+        }
+        .code {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: monospace;
+            margin: 10px 0;
+        }
+        svg {
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            margin: 20px 0;
+            background: white;
+        }
+        .highlight {
+            background: #fff3cd;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="explanation">
+        <h1>气泡尾巴识别说明</h1>
+
+        <h2>蓝色气泡尾巴</h2>
+        <div class="tail-info">
+            <p><strong>SVG路径代码：</strong></p>
+            <div class="code">L 70 160 L 30 195 L 40 160</div>
+            <p><strong>我的理解：</strong></p>
+            <ul>
+                <li>起始点：(70, 160) - 气泡底部边缘</li>
+                <li>尖端：(30, 195) - 向左下方</li>
+                <li>返回点：(40, 160)</li>
+            </ul>
+            <p><strong>尺寸计算：</strong></p>
+            <ul>
+                <li>水平宽度：70 - 40 = <span class="highlight">30px</span></li>
+                <li>垂直高度：195 - 160 = <span class="highlight">35px</span></li>
+            </ul>
+        </div>
+
+        <h2>粉色气泡尾巴</h2>
+        <div class="tail-info">
+            <p><strong>SVG路径代码：</strong></p>
+            <div class="code">L 140 130 L 170 165 L 130 130</div>
+            <p><strong>我的理解：</strong></p>
+            <ul>
+                <li>起始点：(140, 130) - 气泡底部边缘</li>
+                <li>尖端：(170, 165) - 向右下方</li>
+                <li>返回点：(130, 130)</li>
+            </ul>
+            <p><strong>尺寸计算：</strong></p>
+            <ul>
+                <li>水平宽度：170 - 130 = <span class="highlight">40px</span></li>
+                <li>垂直高度：165 - 130 = <span class="highlight">35px</span></li>
+            </ul>
+        </div>
+
+        <h2>可视化说明</h2>
+        <svg width="600" height="400" viewBox="0 0 600 400">
+            <!-- 蓝色气泡尾巴 -->
+            <g transform="translate(50, 50)">
+                <text x="0" y="-10" font-size="16" font-weight="bold" fill="#333">蓝色尾巴</text>
+                <path d="M 70 100 L 30 135 L 40 100" fill="#A8B8E8" stroke="#667eea" stroke-width="2"/>
+                <circle cx="70" cy="100" r="5" fill="#ff6b6b"/>
+                <text x="70" y="90" font-size="12" fill="#ff6b6b" text-anchor="middle">起点</text>
+                <circle cx="30" cy="135" r="5" fill="#51cf66"/>
+                <text x="30" y="155" font-size="12" fill="#51cf66" text-anchor="middle">尖端</text>
+                <circle cx="40" cy="100" r="5" fill="#ffd43b"/>
+                <text x="40" y="90" font-size="12" fill="#ffd43b" text-anchor="middle">返回</text>
+                <line x1="70" y1="100" x2="30" y2="135" stroke="#ff6b6b" stroke-width="2" stroke-dasharray="5,5"/>
+                <line x1="30" y1="100" x2="40" y2="100" stroke="#666" stroke-width="1"/>
+                <line x1="30" y1="100" x2="30" y2="135" stroke="#666" stroke-width="1"/>
+                <text x="10" y="115" font-size="11" fill="#666">30px→</text>
+                <text x="15" y="125" font-size="11" fill="#666">↓35px</text>
+            </g>
+
+            <!-- 粉色气泡尾巴 -->
+            <g transform="translate(300, 50)">
+                <text x="0" y="-10" font-size="16" font-weight="bold" fill="#333">粉色尾巴</text>
+                <path d="M 140 100 L 170 135 L 130 100" fill="#F0B8D1" stroke="#ff6b9d" stroke-width="2"/>
+                <circle cx="140" cy="100" r="5" fill="#ff6b6b"/>
+                <text x="140" y="90" font-size="12" fill="#ff6b6b" text-anchor="middle">起点</text>
+                <circle cx="170" cy="135" r="5" fill="#51cf66"/>
+                <text x="170" y="155" font-size="12" fill="#51cf66" text-anchor="middle">尖端</text>
+                <circle cx="130" cy="100" r="5" fill="#ffd43b"/>
+                <text x="130" y="90" font-size="12" fill="#ffd43b" text-anchor="middle">返回</text>
+                <line x1="140" y1="100" x2="170" y2="135" stroke="#ff6b6b" stroke-width="2" stroke-dasharray="5,5"/>
+                <line x1="130" y1="100" x2="170" y2="100" stroke="#666" stroke-width="1"/>
+                <line x1="170" y1="100" x2="170" y2="135" stroke="#666" stroke-width="1"/>
+                <text x="140" y="115" font-size="11" fill="#666">←40px</text>
+                <text x="175" y="125" font-size="11" fill="#666">↓35px</text>
+            </g>
+        </svg>
+
+        <div class="tail-info" style="background: #fff3cd; border-left-color: #ffc107;">
+            <h3 style="margin-top: 0;">💡 问题发现</h3>
+            <p>我发现：<strong>蓝色尾巴水平30px，粉色尾巴水平40px</strong></p>
+            <p>需要将粉色尾巴改为：<span class="code">L 140 130 L 170 165 L 140 130</span> 或者调整其他参数</p>
+        </div>
+    </div>
+</body>
+</html>

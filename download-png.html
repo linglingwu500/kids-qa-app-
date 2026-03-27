@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>下载PNG图标</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px 20px;
+            gap: 40px;
+        }
+
+        h1 {
+            color: white;
+            font-size: 32px;
+            text-align: center;
+            text-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        }
+
+        .preview-container {
+            display: flex;
+            gap: 40px;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .size-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+            background: rgba(255,255,255,0.1);
+            backdrop-filter: blur(10px);
+            padding: 24px;
+            border-radius: 20px;
+        }
+
+        .size-label {
+            color: white;
+            font-size: 16px;
+            font-weight: 500;
+        }
+
+        img {
+            border-radius: 24px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        }
+
+        .download-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            justify-content: center;
+        }
+
+        .download-btn {
+            padding: 16px 32px;
+            background: white;
+            color: #764ba2;
+            border: none;
+            border-radius: 28px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .download-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+        }
+
+        .download-btn:active {
+            transform: translateY(0);
+        }
+
+        .info {
+            background: rgba(255,255,255,0.1);
+            backdrop-filter: blur(10px);
+            padding: 20px 30px;
+            border-radius: 16px;
+            color: white;
+            max-width: 600px;
+            line-height: 1.8;
+            text-align: center;
+        }
+
+        .info h3 {
+            margin-bottom: 12px;
+            font-size: 20px;
+        }
+
+        .tips {
+            background: rgba(255,255,255,0.1);
+            backdrop-filter: blur(10px);
+            padding: 16px 24px;
+            border-radius: 12px;
+            color: white;
+            font-size: 14px;
+            text-align: center;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎨 儿童问答小程序图标 - PNG下载</h1>
+
+    <div id="svgContainer">
+        <svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg" id="sourceSVG">
+          <!-- 背景圆形 -->
+          <defs>
+            <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" style="stop-color:#F0B8D1;stop-opacity:1" />
+              <stop offset="50%" style="stop-color:#D4A8CC;stop-opacity:1" />
+              <stop offset="100%" style="stop-color:#A8B8E8;stop-opacity:1" />
+            </linearGradient>
+          </defs>
+
+          <!-- 主背景圆 -->
+          <circle cx="256" cy="256" r="256" fill="#FFFFFF" />
+
+          <!-- 四角星形状定义 -->
+          <defs>
+            <path id="fourPointStar" d="M 30 0
+                     C 35 15, 40 20, 55 25
+                     C 40 30, 35 35, 30 50
+                     C 25 35, 20 30, 5 25
+                     C 20 20, 25 15, 30 0
+                     Z"/>
+          </defs>
+
+          <!-- 大聊天气泡（蓝色） -->
+          <g transform="translate(120, 190)">
+            <path d="M 0 40 Q 0 0 40 0 L 200 0 Q 240 0 240 40 L 240 120 Q 240 160 200 160 L 70 160 L 30 195 L 40 160 L 40 160 Q 0 160 0 120 Z"
+                  fill="#A8B8E8"
+                  opacity="0.9"/>
+
+            <!-- 左眼 - 豆豆眼风格 -->
+            <circle cx="70" cy="68" r="10" fill="white"/>
+            <circle cx="70" cy="68" r="6" fill="#3A4A7E"/>
+            <circle cx="72" cy="65" r="2.5" fill="white"/>
+
+            <!-- 右眼 - 豆豆眼风格 -->
+            <circle cx="170" cy="68" r="10" fill="white"/>
+            <circle cx="170" cy="68" r="6" fill="#3A4A7E"/>
+            <circle cx="172" cy="65" r="2.5" fill="white"/>
+
+            <!-- 腮红 -->
+            <ellipse cx="55" cy="88" rx="16" ry="10" fill="#FFB8D1" opacity="0.7"/>
+            <ellipse cx="185" cy="88" rx="16" ry="10" fill="#FFB8D1" opacity="0.7"/>
+
+            <!-- 小小微笑嘴巴 -->
+            <path d="M 105 108 Q 120 118 135 108"
+                  stroke="white"
+                  stroke-width="5"
+                  fill="none"
+                  stroke-linecap="round"/>
+          </g>
+
+          <!-- 小聊天气泡（粉色） -->
+          <g transform="translate(260, 110)">
+            <!-- 气泡主体 -->
+            <path d="M 0 30 Q 0 0 30 0 L 140 0 Q 170 0 170 30 L 170 100 Q 170 130 140 130 L 30 130 Q 0 130 0 100 Z"
+                  fill="#F0B8D1"
+                  opacity="0.9"/>
+            <!-- 尾巴 -->
+            <path d="M 140 130 L 115 125 L 150 160 L 140 130 Z"
+                  fill="#F0B8D1"
+                  opacity="0.9"/>
+
+            <!-- 左眼 - 豆豆眼风格 -->
+            <circle cx="50" cy="53" r="8" fill="white"/>
+            <circle cx="50" cy="53" r="5" fill="#8A4A6E"/>
+            <circle cx="52" cy="50" r="2" fill="white"/>
+
+            <!-- 右眼 - 豆豆眼风格 -->
+            <circle cx="120" cy="53" r="8" fill="white"/>
+            <circle cx="120" cy="53" r="5" fill="#8A4A6E"/>
+            <circle cx="122" cy="50" r="2" fill="white"/>
+
+            <!-- 腮红 -->
+            <ellipse cx="38" cy="72" rx="12" ry="8" fill="#FFD4E5" opacity="0.7"/>
+            <ellipse cx="132" cy="72" rx="12" ry="8" fill="#FFD4E5" opacity="0.7"/>
+
+            <!-- 小小微笑嘴巴 -->
+            <path d="M 70 88 Q 85 98 100 88"
+                  stroke="white"
+                  stroke-width="4"
+                  fill="none"
+                  stroke-linecap="round"/>
+          </g>
+
+          <!-- 好奇心图标 - 主四角星 -->
+          <g transform="translate(330, 265)">
+            <!-- 自然光晕 - 多层柔和光晕 -->
+            <g opacity="0.3">
+              <ellipse cx="30" cy="25" rx="50" ry="46" fill="url(#bgGradient)" opacity="0.35"/>
+              <ellipse cx="30" cy="25" rx="42" ry="38" fill="url(#bgGradient)" opacity="0.45"/>
+              <ellipse cx="30" cy="25" rx="34" ry="30" fill="url(#bgGradient)" opacity="0.55"/>
+            </g>
+
+            <!-- 主四角星 -->
+            <use href="#fourPointStar" fill="url(#bgGradient)" stroke="white" stroke-width="2.5"/>
+
+            <!-- 内部高光 - 增加立体感 -->
+            <ellipse cx="30" cy="20" rx="12" ry="10" fill="white" opacity="0.35"/>
+          </g>
+
+          <!-- 散布的小四角星群 -->
+          <!-- 左上区域 -->
+          <g transform="translate(80, 130) scale(0.9)">
+            <use href="#fourPointStar" fill="url(#bgGradient)" opacity="0.5"/>
+          </g>
+
+          <g transform="translate(50, 170) scale(0.55)">
+            <use href="#fourPointStar" fill="#F0B8D1" opacity="0.6"/>
+          </g>
+
+          <!-- 右上区域 -->
+          <g transform="translate(420, 120) scale(0.65)">
+            <use href="#fourPointStar" fill="#A8B8E8" opacity="0.55"/>
+          </g>
+
+          <g transform="translate(450, 160) scale(0.45)">
+            <use href="#fourPointStar" fill="url(#bgGradient)" opacity="0.5"/>
+          </g>
+
+          <!-- 中间区域 -->
+          <g transform="translate(280, 350) scale(0.4)">
+            <use href="#fourPointStar" fill="#F0B8D1" opacity="0.4"/>
+          </g>
+
+          <!-- 底部区域 -->
+          <g transform="translate(150, 410) scale(0.5)">
+            <use href="#fourPointStar" fill="#A8B8E8" opacity="0.45"/>
+          </g>
+
+          <g transform="translate(380, 430) scale(0.6)">
+            <use href="#fourPointStar" fill="url(#bgGradient)" opacity="0.5"/>
+          </g>
+
+          <g transform="translate(250, 450) scale(0.35)">
+            <use href="#fourPointStar" fill="#F0B8D1" opacity="0.35"/>
+          </g>
+
+          <!-- 气泡附近的小星星 -->
+          <g transform="translate(200, 310) scale(0.3)">
+            <use href="#fourPointStar" fill="#A8B8E8" opacity="0.4"/>
+          </g>
+
+          <g transform="translate(430, 330) scale(0.38)">
+            <use href="#fourPointStar" fill="#F0B8D1" opacity="0.45"/>
+          </g>
+
+          <!-- 闪烁的微小星光点 - 圆形点 -->
+          <circle cx="100" cy="210" r="3" fill="#F0B8D1" opacity="0.6"/>
+          <circle cx="420" cy="380" r="2" fill="url(#bgGradient)" opacity="0.4"/>
+          <circle cx="180" cy="380" r="2.5" fill="#F0B8D1" opacity="0.5"/>
+          <circle cx="120" cy="330" r="1.8" fill="url(#bgGradient)" opacity="0.45"/>
+          <circle cx="400" cy="230" r="2.2" fill="#F0B8D1" opacity="0.55"/>
+          <circle cx="280" cy="410" r="1.5" fill="#A8B8E8" opacity="0.35"/>
+        </svg>
+    </div>
+
+    <div class="preview-container">
+        <div class="size-item">
+            <img id="preview512" alt="512x512预览" width="256" height="256">
+            <span class="size-label">512 × 512</span>
+        </div>
+        <div class="size-item">
+            <img id="preview256" alt="256x256预览" width="128" height="128">
+            <span class="size-label">256 × 256</span>
+        </div>
+        <div class="size-item">
+            <img id="preview128" alt="128x128预览" width="64" height="64">
+            <span class="size-label">128 × 128</span>
+        </div>
+    </div>
+
+    <div class="download-buttons">
+        <button class="download-btn" onclick="downloadPNG(512)">
+            📥 下载 512×512
+        </button>
+        <button class="download-btn" onclick="downloadPNG(256)">
+            📥 下载 256×256
+        </button>
+        <button class="download-btn" onclick="downloadPNG(128)">
+            📥 下载 128×128
+        </button>
+        <button class="download-btn" onclick="downloadAllSizes()">
+            📦 打包下载全部尺寸
+        </button>
+    </div>
+
+    <div class="info">
+        <h3>💡 使用说明</h3>
+        <p>• 512×512：适用于微信小程序、App图标</p>
+        <p>• 256×256：适用于网站favicon、小图标</p>
+        <p>• 128×128：适用于按钮图标、小Logo</p>
+        <p>• 所有图标均为高清PNG格式，透明背景</p>
+    </div>
+
+    <div class="tips">
+        ⚠️ 首次打开需要加载SVG文件，请稍候片刻...
+    </div>
+
+    <script>
+        // 从嵌入的SVG获取内容
+        function getSVGString() {
+            const svgElement = document.getElementById('sourceSVG');
+            return new XMLSerializer().serializeToString(svgElement);
+        }
+
+        // SVG转PNG
+        function svgToPNG(svgString, size) {
+            return new Promise((resolve, reject) => {
+                const canvas = document.createElement('canvas');
+                canvas.width = size;
+                canvas.height = size;
+                const ctx = canvas.getContext('2d');
+
+                const img = new Image();
+                const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+                const url = URL.createObjectURL(svgBlob);
+
+                img.onload = function() {
+                    ctx.drawImage(img, 0, 0, size, size);
+                    URL.revokeObjectURL(url);
+
+                    canvas.toBlob((blob) => {
+                        resolve(blob);
+                    }, 'image/png');
+                };
+
+                img.onerror = reject;
+                img.src = url;
+            });
+        }
+
+        // 生成预览图
+        async function generatePreview(size, imgId) {
+            try {
+                const svgString = getSVGString();
+                const pngBlob = await svgToPNG(svgString, size);
+                const url = URL.createObjectURL(pngBlob);
+                document.getElementById(imgId).src = url;
+            } catch (error) {
+                console.error('生成预览失败:', error);
+            }
+        }
+
+        // 初始化页面
+        function initPage() {
+            try {
+                // 生成预览图
+                generatePreview(512, 'preview512');
+                generatePreview(256, 'preview256');
+                generatePreview(128, 'preview128');
+
+                // 更新提示
+                document.querySelector('.tips').textContent = '✅ 图标已准备就绪，可以选择尺寸下载！';
+            } catch (error) {
+                document.querySelector('.tips').textContent = '❌ 初始化失败: ' + error.message;
+                console.error('初始化失败:', error);
+            }
+        }
+
+        // 下载单个尺寸PNG
+        async function downloadPNG(size) {
+            try {
+                const svgString = getSVGString();
+                const pngBlob = await svgToPNG(svgString, size);
+                const url = URL.createObjectURL(pngBlob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `儿童问答小程序图标_${size}x${size}.png`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            } catch (error) {
+                alert('下载失败: ' + error.message);
+                console.error('下载失败:', error);
+            }
+        }
+
+        // 打包下载全部尺寸
+        async function downloadAllSizes() {
+            const sizes = [512, 256, 128];
+
+            for (let size of sizes) {
+                await new Promise(resolve => setTimeout(resolve, 500)); // 延迟避免浏览器阻止
+                await downloadPNG(size);
+            }
+        }
+
+        // 页面加载时自动初始化
+        window.onload = initPage;
+    </script>
+</body>
+</html>
