@@ -1,55 +1,220 @@
 .index-page {
-  // 温馨浅色背景
-  background: linear-gradient(180deg, #f8f9fa 0%, #e9ecef 100%);
+  // 白色渐变背景（整体页面背景）
+  background: linear-gradient(180deg, #faf5ff 0%, #ffffff 100%);
   min-height: 100vh;
-  padding: 40px 24px 200px;
-  display: flex;
-  flex-direction: column;
-  box-sizing: border-box;
+  // padding-top 通过内联样式动态设置
 }
 
-/* 顶部欢迎区域 */
-.welcome-section {
+/* 自定义导航栏 */
+.custom-navbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 9999;
+}
+
+.status-bar {
+  height: 88px;
+  background: linear-gradient(135deg, #FF9ACD 0%, #9FC5FF 100%);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 32px;
-  padding: 32px;
-  background: rgba(255, 255, 255, 0.95);
-  border: 2px solid #f0f0f0;
-  border-radius: 28px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  padding: 0 20px;
+  color: white;
+  font-size: 14px;
+  font-weight: 500;
+  padding-top: 44px; // 状态栏高度（微信小程序状态栏）
 }
 
-.welcome-content {
+.status-bar-time {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.status-bar-title {
+  font-size: 16px;
+  font-weight: 600;
   flex: 1;
+  text-align: center;
 }
 
-.welcome-title {
-  font-size: 40px;
-  font-weight: 700;
-  color: #6ba3f5;
-  margin-bottom: 12px;
-  display: block;
+.status-bar-icon {
+  font-size: 16px;
 }
 
-.welcome-subtitle {
-  font-size: 28px;
-  color: #adb5bd;
-  display: block;
-  font-weight: 400;
+/* 儿童信息卡片 */
+.kid-info-card {
+  background: linear-gradient(135deg, #FF9ACD 0%, #9FC5FF 100%);
+  padding: 40px 20px;
+  color: white;
 }
 
-.welcome-illustration {
-  .illustration-emoji {
-    font-size: 90px;
-    animation: float 3s ease-in-out infinite;
+.kid-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.product-slogan {
+  font-size: 30px;
+  font-weight: 600;
+  letter-spacing: 0.8px;
+  opacity: 0.95;
+  flex: 1;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  line-height: 1.3;
+  word-wrap: break-word;
+  word-break: break-word;
+}
+
+.star-large {
+  font-size: 30px;
+  margin-left: 4px;
+}
+
+.star-small {
+  font-size: 20px;
+  margin-left: 2px;
+}
+
+/* 家长中心按钮 */
+.parent-center-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.2);
+  padding: 12px 20px;
+  border-radius: 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+  color: white;
+  box-sizing: border-box;
+  min-width: 100px;
+
+  &:active {
+    transform: scale(0.95);
+    background: rgba(255, 255, 255, 0.3);
   }
 }
 
-@keyframes float {
-  0%, 100% { transform: translateY(0px); }
-  50% { transform: translateY(-8px); }
+.parent-icon {
+  display: none;
+}
+
+.parent-text {
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1;
+}
+
+/* 年龄段选择器 */
+.age-selector {
+  display: flex;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+}
+
+.age-option {
+  flex: 1;
+  min-width: 82px;
+  background: rgba(255, 255, 255, 0.15);
+  border: 2px solid transparent;
+  border-radius: 12px;
+  padding: 10px 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+
+  &.active {
+    background: rgba(255, 255, 255, 0.95);
+    border-color: rgba(255, 255, 255, 0.5);
+    transform: scale(1.05);
+
+    .age-emoji,
+    .age-range,
+    .age-description {
+      color: #6BB0FF;
+    }
+  }
+}
+
+.age-emoji {
+  font-size: 32px;
+  color: #fff;
+  margin: 0;
+  padding: 0;
+}
+
+.age-range {
+  font-size: 18px;
+  font-weight: 600;
+  text-align: center;
+  color: #fff;
+  margin: 0;
+  padding: 0;
+}
+
+.age-description {
+  font-size: 14px;
+  text-align: center;
+  opacity: 0.9;
+  line-height: 1.2;
+  white-space: nowrap;
+  color: #fff;
+  margin: 0;
+  padding: 0;
+}
+
+/* 隐藏旧的样式 */
+.welcome-section {
+  display: none;
+}
+
+.welcome-content {
+  display: none;
+}
+
+.welcome-title {
+  display: none;
+}
+
+.welcome-subtitle {
+  display: none;
+}
+
+.welcome-illustration {
+  display: none;
+}
+
+.age-selector-card {
+  display: none;
+}
+
+.age-card-header {
+  display: none;
+}
+
+.age-card-title {
+  display: none;
+}
+
+.age-selector-list {
+  display: none;
+}
+
+.age-desc {
+  display: none;
 }
 
 /* 实时语音连接状态 */
@@ -104,140 +269,192 @@
 }
 
 /* 年龄段选择器 */
-.age-stage-section {
+.age-selector-card {
   margin-bottom: 32px;
   padding: 28px;
-  background: rgba(255, 255, 255, 0.95);
-  border: 2px solid #f0f0f0;
+  background: linear-gradient(135deg, #FF9ACD 0%, #9FC5FF 100%);
   border-radius: 28px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
 }
 
-.section-label {
-  font-size: 28px;
-  color: #495057;
-  font-weight: 600;
-  margin-bottom: 20px;
-  display: block;
-}
-
-.stages-list {
+.age-card-header {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   margin-bottom: 20px;
+}
+
+.age-card-title {
+  font-size: 28px;
+  color: #fff;
+  font-weight: 600;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  flex: 1;
+}
+
+.age-selector-list {
+  display: flex;
+  justify-content: space-between;
   gap: 12px;
 }
 
-.stage-item {
+.age-option {
   flex: 1;
+  min-width: 82px;
   display: flex;
   flex-direction: column;
   align-items: center;
   padding: 20px 8px;
-  background: #fff;
-  border: 2px solid #e8eef5;
+  background: rgba(255, 255, 255, 0.15);
+  border: 2px solid transparent;
   border-radius: 20px;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: pointer;
   position: relative;
 
   &.active {
-    background: linear-gradient(90deg, #6ba3f5, #f8b4d9);
-    border: 2px solid transparent;
-    box-shadow: 0 4px 16px rgba(107, 163, 245, 0.25);
-    transform: translateY(-2px);
+    background: rgba(255, 255, 255, 0.95);
+    border: 2px solid rgba(255, 255, 255, 0.5);
+    box-shadow: 0 4px 16px rgba(255, 255, 255, 0.25);
+    transform: scale(1.05);
 
-    // 使用伪元素创建渐变边框
-    &::before {
-      content: '';
-      position: absolute;
-      top: -2px;
-      left: -2px;
-      right: -2px;
-      bottom: -2px;
-      background: linear-gradient(90deg, #6ba3f5, #f8b4d9);
-      border-radius: 20px;
-      z-index: -1;
-    }
-
-    .stage-emoji,
-    .stage-label {
-      color: #fff;
+    .age-emoji,
+    .age-range,
+    .age-desc {
+      color: #6BB0FF;
     }
   }
 }
 
-.stage-emoji {
-  font-size: 44px;
-  margin-bottom: 8px;
-  color: #4a90e2;
+.age-emoji {
+  font-size: 48px;
+  margin-bottom: 6px;
+  color: #fff;
   transition: all 0.3s ease;
+}
+
+.age-range {
+  font-size: 22px;
+  color: #fff;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  text-align: center;
+  opacity: 0.9;
+}
+
+.age-desc {
+  font-size: 18px;
+  color: #fff;
+  text-align: center;
+  margin-top: 4px;
+  opacity: 0.85;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+/* 旧的样式（保留用于向后兼容） */
+.age-stage-section {
+  display: none;
+}
+
+.section-label {
+  display: none;
+}
+
+.stages-list {
+  display: none;
+}
+
+.stage-item {
+  display: none;
+}
+
+.stage-emoji {
+  display: none;
 }
 
 .stage-label {
-  font-size: 22px;
-  color: #6c757d;
-  font-weight: 600;
-  transition: all 0.3s ease;
+  display: none;
 }
 
 .stage-desc {
-  font-size: 24px;
-  color: #adb5bd;
-  text-align: center;
-  display: block;
-  padding: 16px;
-  background: rgba(248, 180, 217, 0.15);
-  border-radius: 14px;
-  font-weight: 500;
-  border: none;
+  display: none;
 }
 
 /* 聊天对话区域 */
 .chat-section {
   flex: 1;
+  background: transparent;
+  padding: 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
   margin-bottom: 20px;
   min-height: 400px;
 }
 
 /* 建议问题区域 */
-.suggestions-section {
-  padding: 20px;
-}
-
-.suggestions-title {
-  font-size: 28px;
-  color: #495057;
-  font-weight: 600;
-  margin-bottom: 20px;
-  display: block;
-}
-
-.suggestions-list {
+.default-questions {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
 }
 
-.suggestion-item {
-  padding: 24px 28px;
-  background: #fff;
-  border: 2px solid #6ba3f5;
-  border-radius: 24px;
-  box-shadow: 0 2px 8px rgba(107, 163, 245, 0.12);
-  transition: all 0.2s ease;
+.questions-title {
+  font-size: 15px;
+  color: #666;
+  text-align: center;
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+.questions-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.question-card {
+  background: white;
+  border: 1.5px solid #E8E8E8;
+  border-radius: 16px;
+  padding: 14px 12px;
+  font-size: 13px;
+  color: #444;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  line-height: 1.4;
 
   &:active {
-    transform: scale(0.98);
-    box-shadow: 0 1px 4px rgba(107, 163, 245, 0.18);
+    background: linear-gradient(135deg, #FF9ACD 0%, #9FC5FF 100%);
+    border-color: transparent;
+    color: white;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   }
 }
 
+/* 隐藏旧的样式 */
+.suggestions-section {
+  display: none;
+}
+
+.suggestions-title {
+  display: none;
+}
+
+.suggestions-list {
+  display: none;
+}
+
+.suggestion-item {
+  display: none;
+}
+
 .suggestion-text {
-  font-size: 26px;
-  color: #6ba3f5;
-  line-height: 1.6;
-  font-weight: 400;
+  display: none;
 }
 
 /* 聊天消息 */
@@ -267,10 +484,10 @@
 }
 
 .message-user .message-content {
-  background: #a3c5f0;
+  background: linear-gradient(135deg, #FF9ACD 0%, #E090B8 100%);
   padding: 20px 24px;
   border-radius: 24px 24px 8px 24px;
-  box-shadow: 0 4px 12px rgba(107, 163, 245, 0.18);
+  box-shadow: 0 4px 12px rgba(255, 154, 205, 0.18);
   border: none;
 
   .answer-text {
@@ -296,10 +513,10 @@
 
 .message-assistant .message-content {
   background: #fff;
-  border: 2px solid #f8b4d9;
-  padding: 24px;
-  border-radius: 24px 24px 24px 8px;
-  box-shadow: 0 4px 16px rgba(248, 180, 217, 0.12);
+  border: none;
+  padding: 12px 16px;
+  border-radius: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 /* 年龄段切换消息 */
@@ -618,19 +835,32 @@
 }
 
 /* 语音输入区域 - 扁平简洁设计 */
-/* 语音输入区域 - 蓝粉渐变设计 */
+/* 语音输入区域 - 粉蓝渐变设计 */
 .voice-input-wrapper {
   flex: 1;
   display: flex;
   align-items: center;
-  position: relative; /* 添加相对定位，使内部的绝对定位按钮相对于此元素 */
-  background: linear-gradient(135deg, #6ba3f5 0%, #f8b4d9 100%);
+  position: relative;
+  background: linear-gradient(135deg, #FF9ACD 0%, #9FC5FF 100%);
   border: none;
   border-radius: 40px;
   overflow: hidden;
-  height: 128px; /* 原来的2倍：64px × 2 = 128px */
+  height: 128px;
   transition: all 0.2s ease;
-  box-shadow: 0 6px 16px rgba(107, 163, 245, 0.3);
+  box-shadow: 0 6px 16px rgba(255, 154, 205, 0.3);
+}
+
+.voice-input-wrapper.recording {
+  animation: pulse-recording 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-recording {
+  0%, 100% {
+    box-shadow: 0 6px 16px rgba(255, 154, 205, 0.3);
+  }
+  50% {
+    box-shadow: 0 6px 24px rgba(159, 197, 255, 0.5), 0 0 0 8px rgba(255, 154, 205, 0.2);
+  }
 }
 
 .voice-input-content {
@@ -664,31 +894,31 @@
   gap: 16px; /* 增加间距 */
 }
 
-/* 波形动画容器 - 白色设计 */
+/* 波形动画容器 - 录音时显示5条白色竖线 */
 .waveform-container {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
-  height: 70px; /* 增加高度 */
-  margin-bottom: 12px;
+  gap: 3px;
+  height: 40px;
+  margin-bottom: 8px;
 }
 
 .wave-bar {
-  width: 5px; /* 稍微加宽 */
+  width: 3px;
   background: rgba(255, 255, 255, 0.5);
-  border-radius: 3px;
+  border-radius: 2px;
   transition: height 0.1s ease;
 
   &.active {
-    animation: wave 0.5s ease-in-out infinite alternate;
-    background: rgba(255, 255, 255, 0.9);
+    animation: wave-recording 1s ease-in-out infinite;
+    background: #fff;
   }
 }
 
-@keyframes wave {
-  0% { height: 20px; }
-  100% { height: 60px; }
+@keyframes wave-recording {
+  0%, 100% { height: 10px; }
+  50% { height: 25px; }
 }
 
 .recording-icon {
@@ -843,11 +1073,21 @@
 }
 
 .voice-prompt-text {
-  font-size: 24px; /* 增大文字 */
+  font-size: 24px;
   color: #fff;
   font-weight: 600;
   letter-spacing: 0.5px;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+/* 录音状态 - 显示波形和松开发送 */
+.recording-status {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 16px 20px;
 }
 
 .question-input {
@@ -870,8 +1110,8 @@
 .submit-button {
   width: 130px;
   height: 76px;
-  background: linear-gradient(90deg, #6ba3f5, #f8b4d9);
-  border: 2px solid #e8eef5;
+  background: linear-gradient(135deg, #9FC5FF 0%, #B0D0FF 100%);
+  border: none;
   border-radius: 24px;
   color: #fff;
   font-size: 26px;
@@ -881,30 +1121,15 @@
   justify-content: center;
   flex-shrink: 0;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-  position: relative;
+  box-shadow: 0 2px 8px rgba(159, 197, 255, 0.3);
 
   &:not([disabled]):active {
     transform: scale(0.95);
-    box-shadow: 0 1px 4px rgba(107, 163, 245, 0.15);
-    border-color: transparent;
-
-    &::before {
-      content: '';
-      position: absolute;
-      top: -2px;
-      left: -2px;
-      right: -2px;
-      bottom: -2px;
-      background: linear-gradient(90deg, #6ba3f5, #f8b4d9);
-      border-radius: 24px;
-      z-index: -1;
-    }
+    box-shadow: 0 1px 4px rgba(159, 197, 255, 0.2);
   }
 
   &[disabled] {
     background: #f8f9fa;
-    border-color: #e9ecef;
     color: #adb5bd;
     box-shadow: none;
   }
@@ -1047,33 +1272,15 @@
   }
 }
 
-/* 家长入口 - 与语音按钮等高 */
+/* 家长入口 - 已移到年龄选择卡片中 */
 .parent-entry {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  width: 128px; /* 与高度一致，保持圆形 */
-  height: 128px; /* 与语音按钮高度一致 */
-  background: linear-gradient(135deg, #f8b4d9 0%, #6ba3f5 100%); /* 反向渐变 */
-  border: none;
-  border-radius: 50%;
-  margin-right: 16px;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  flex-shrink: 0;
-  box-shadow: 0 4px 12px rgba(248, 180, 217, 0.3);
-
-  &:active {
-    transform: scale(0.95);
-    box-shadow: 0 2px 8px rgba(248, 180, 217, 0.2);
-  }
+  display: none;
 }
 
 .parent-entry-icon {
-  font-size: 52px; /* 增大图标以匹配更大的按钮 */
-  margin-bottom: 0;
+  display: none;
 }
 
 .parent-entry-text {
-  display: none; /* 隐藏文字，只保留图标 */
+  display: none;
 }

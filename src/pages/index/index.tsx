@@ -16,25 +16,25 @@ const AGE_STAGES = [
   {
     range: [3, 5],
     label: '3-5岁',
-    emoji: '🧒',
+    emoji: '🧸',
     desc: '具体形象思维'
   },
   {
     range: [6, 7],
     label: '6-7岁',
-    emoji: '🎒',
+    emoji: '📚',
     desc: '逻辑思维萌芽'
   },
   {
     range: [8, 9],
     label: '8-9岁',
-    emoji: '🧠',
+    emoji: '🎨',
     desc: '抽象思维开始'
   },
   {
     range: [10, 12],
     label: '10-12岁',
-    emoji: '🔭',
+    emoji: '🚀',
     desc: '逻辑思维发展'
   }
 ]
@@ -64,6 +64,9 @@ const Index = () => {
   const [showSetup, setShowSetup] = useState(false)
   const [childName, setChildName] = useState('')
   const [childAge, setChildAge] = useState('')
+
+  // 状态栏高度
+  const [statusBarHeight, setStatusBarHeight] = useState(44)
 
   // 语音相关状态
   const [inputMode, setInputMode] = useState<'text' | 'voice'>('voice')
@@ -98,6 +101,18 @@ const Index = () => {
   const router = useRouter()
 
   console.log('=== Index 组件 ===')
+
+  // 获取系统信息（状态栏高度）
+  useEffect(() => {
+    try {
+      const systemInfo = Taro.getSystemInfoSync()
+      console.log('系统信息:', systemInfo)
+      setStatusBarHeight(systemInfo.statusBarHeight || 44)
+    } catch (error) {
+      console.error('获取系统信息失败:', error)
+      setStatusBarHeight(44)
+    }
+  }, [])
 
   // 根据孩子年龄自动选择对应的阶段
   useEffect(() => {
@@ -1155,7 +1170,13 @@ const Index = () => {
   const currentStage = AGE_STAGES[selectedStage] || AGE_STAGES[0]
 
   return (
-    <View className="index-page">
+    <View className="index-page" style={{ paddingTop: `${statusBarHeight + 44}px` }}>
+      {/* 自定义状态栏和导航栏 */}
+      <View className="custom-navbar">
+        <View className="status-bar" style={{ paddingTop: `${statusBarHeight}px` }}>
+        </View>
+      </View>
+
       {/* 设置孩子信息弹窗 */}
       {showSetup && (
         <View className="setup-modal">
@@ -1205,23 +1226,34 @@ const Index = () => {
         </View>
       )}
 
-      {/* 顶部欢迎区域 */}
-      <View className="welcome-section">
-        <View className="welcome-content">
-          <Text className="welcome-title">
-            {childInfo ? `你好，${childInfo.name}！` : '欢迎来到好奇宝宝问答'}
-          </Text>
-          <Text className="welcome-subtitle">
-            {childInfo ? '有什么问题想问吗？' : '请先设置孩子信息'}
-          </Text>
-          {!childInfo && (
-            <Button className="setup-trigger" onClick={() => setShowSetup(true)}>
-              设置孩子信息
-            </Button>
-          )}
+      {/* 儿童信息卡片 */}
+      <View className="kid-info-card">
+        {/* 头部信息 */}
+        <View className="kid-header">
+          <View className="product-slogan">
+            Big questions deserve Little answers <Text className="star-large">✦</Text><Text className="star-small">✦</Text>
+          </View>
+          <View
+            className="parent-center-btn"
+            onClick={() => Taro.navigateTo({ url: '/pages/parent/index' })}
+          >
+            <Text className="parent-text">家长中心</Text>
+          </View>
         </View>
-        <View className="welcome-illustration">
-          <Text className="illustration-emoji">🐻</Text>
+
+        {/* 年龄段选择器 */}
+        <View className="age-selector">
+          {AGE_STAGES.map((stage, index) => (
+            <View
+              key={index}
+              className={`age-option ${selectedStage === index ? 'active' : ''}`}
+              onClick={() => handleStageSelect(index)}
+            >
+              <Text className="age-emoji">{stage.emoji}</Text>
+              <Text className="age-range">{stage.label}</Text>
+              <Text className="age-description">{stage.desc}</Text>
+            </View>
+          ))}
         </View>
       </View>
 
@@ -1238,26 +1270,6 @@ const Index = () => {
         </View>
       )}
 
-      {/* 年龄段选择器 */}
-      <View className="age-stage-section">
-        <Text className="section-label">选择回答难度：</Text>
-        <View className="stages-list">
-          {AGE_STAGES.map((stage, index) => (
-            <View
-              key={index}
-              className={`stage-item ${selectedStage === index ? 'active' : ''}`}
-              onClick={() => handleStageSelect(index)}
-            >
-              <Text className="stage-emoji">{stage.emoji}</Text>
-              <Text className="stage-label">{stage.label}</Text>
-            </View>
-          ))}
-        </View>
-        <Text className="stage-desc">
-          {currentStage.emoji} {currentStage.label} - {currentStage.desc}
-        </Text>
-      </View>
-
       {/* 聊天对话区域 */}
       <ScrollView
         scrollY
@@ -1266,16 +1278,16 @@ const Index = () => {
       >
         {chatMessages.length === 0 ? (
           // 没有对话时显示建议问题
-          <View className="suggestions-section">
-            <Text className="suggestions-title">你可以试试问：</Text>
-            <View className="suggestions-list">
+          <View className="default-questions">
+            <Text className="questions-title">✨ 开启今天的好奇时刻：</Text>
+            <View className="questions-grid">
               {['天为什么是蓝色的？', '小鸟为什么会飞？', '月亮为什么有圆有缺？', '彩虹是怎么形成的？'].map((suggestion, index) => (
                 <View
                   key={index}
-                  className="suggestion-item"
+                  className="question-card"
                   onClick={() => handleSuggestionClick(suggestion)}
                 >
-                  <Text className="suggestion-text">{suggestion}</Text>
+                  <Text>{suggestion}</Text>
                 </View>
               ))}
             </View>
@@ -1399,14 +1411,6 @@ const Index = () => {
 
       {/* 底部输入区域 */}
       <View className="input-section">
-        <View
-          className="parent-entry"
-          onClick={() => Taro.navigateTo({ url: '/pages/parent/index' })}
-        >
-          <Text className="parent-entry-icon">👨‍👩‍👧</Text>
-          <Text className="parent-entry-text">家长中心</Text>
-        </View>
-
         {/* 语音输入模式（默认） */}
         {inputMode === 'voice' ? (
           <View className="voice-input-wrapper">
@@ -1425,22 +1429,21 @@ const Index = () => {
                   onTouchMove={handleVoiceTouchMove}
                   onTouchEnd={handleVoiceTouchEnd}
                 >
-                  {/* 录音波形动画 */}
+                  {/* 录音波形动画 - 5条白色竖线 */}
                   <View className="waveform-container">
-                    {Array.from({ length: 20 }).map((_, i) => (
+                    {Array.from({ length: 5 }).map((_, i) => (
                       <View
                         key={i}
                         className={`wave-bar ${currentVolume > 0.3 ? 'active' : ''}`}
                         style={{
-                          height: `${20 + Math.random() * 40}px`,
-                          animationDelay: `${i * 0.05}s`
+                          height: `${8 + (i % 3) * 8}px`,
+                          animationDelay: `${i * 0.1}s`
                         }}
                       />
                     ))}
                   </View>
-                  <Text className="recording-icon">🎙️</Text>
                   <Text className="recording-text">
-                    {isCancelingRecording ? '松手取消' : '松手发送'}
+                    {isCancelingRecording ? '松手取消' : '松开发送'}
                   </Text>
                   <Text className="recording-time">{formatRecordingTime(recordingTime)}</Text>
                 </View>
@@ -1457,9 +1460,12 @@ const Index = () => {
                 </View>
               )}
             </View>
-            <View className="input-mode-toggle" onClick={handleToggleInputMode}>
-              <Image className="icon-image" src={keyboardIcon} />
-            </View>
+            {/* 只在非录音时才显示模式切换按钮 */}
+            {!isRecording && (
+              <View className="input-mode-toggle" onClick={handleToggleInputMode}>
+                <Image className="icon-image" src={keyboardIcon} />
+              </View>
+            )}
           </View>
         ) : (
           /* 文字输入模式 */
@@ -1484,12 +1490,12 @@ const Index = () => {
           </View>
         )}
 
-        {/* 只在文字输入模式且有输入内容时显示发送按钮 */}
-        {inputMode === 'text' && question.trim() && (
+        {/* 只在文字输入模式时显示发送按钮 */}
+        {inputMode === 'text' && (
           <Button
             className="submit-button"
             onClick={handleSubmit}
-            disabled={isSubmitting}
+            disabled={isSubmitting || !question.trim()}
           >
             {isSubmitting ? '...' : '发送'}
           </Button>

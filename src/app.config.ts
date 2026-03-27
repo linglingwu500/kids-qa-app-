@@ -5,11 +5,8 @@ export default {
     'pages/test/index'
   ],
   window: {
-    backgroundTextStyle: 'dark',
-    navigationBarBackgroundColor: '#f8f9fa',
-    navigationBarTitleText: '好奇宝宝问答',
-    navigationBarTextStyle: 'black',
-    backgroundColor: '#f8f9fa'
+    navigationStyle: 'custom',
+    backgroundColor: '#faf5ff'
   },
   permission: {
     'scope.record': {
