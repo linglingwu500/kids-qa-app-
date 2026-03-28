@@ -7,8 +7,8 @@ import { formatRelativeTime } from '../../utils/format'
 import { voiceService, ASRResult } from '../../services/voice'
 import { type ASRResult as RealtimeASRResult, type ChatResult, type TTSResult as RealtimeTTSResult } from '../../services/doubao-realtime'
 import micIcon from '../../assets/icons/mic.svg'
-import micWhiteIcon from '../../assets/icons/mic-white.svg'
 import keyboardIcon from '../../assets/icons/keyboard.svg'
+import sendIcon from '../../assets/icons/send.svg'
 import './index.scss'
 
 // 认知发展阶段
@@ -57,13 +57,10 @@ const Index = () => {
   const [childInfo, setChildInfo] = useState<ChildInfo | null>(childInfoData)
   const [question, setQuestion] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [selectedStage, setSelectedStage] = useState<number>(0)
+  const [selectedStage, setSelectedStage] = useState<number>(0) // 默认选中"3-5岁"
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
   const [scrollTop, setScrollTop] = useState(0)
   const [shouldResetHistory, setShouldResetHistory] = useState(false) // 是否需要重置对话历史
-  const [showSetup, setShowSetup] = useState(false)
-  const [childName, setChildName] = useState('')
-  const [childAge, setChildAge] = useState('')
 
   // 状态栏高度
   const [statusBarHeight, setStatusBarHeight] = useState(44)
@@ -114,26 +111,18 @@ const Index = () => {
     }
   }, [])
 
-  // 根据孩子年龄自动选择对应的阶段
+  // 初始化年龄段选择
   useEffect(() => {
     try {
-      if (childInfo) {
-        const savedStage = Taro.getStorageSync('selected_age_stage')
-        if (savedStage && savedStage !== '') {
-          setSelectedStage(parseInt(savedStage))
-        } else {
-          const stageIndex = AGE_STAGES.findIndex(s =>
-            childInfo.age >= s.range[0] && childInfo.age <= s.range[1]
-          )
-          if (stageIndex !== -1) {
-            setSelectedStage(stageIndex)
-          }
-        }
+      const savedStage = Taro.getStorageSync('selected_age_stage')
+      if (savedStage && savedStage !== '') {
+        setSelectedStage(parseInt(savedStage))
       }
+      // 默认已为0（3-5岁），无需额外设置
     } catch (error) {
       console.error('设置阶段失败:', error)
     }
-  }, [childInfo])
+  }, [])
 
   // 每次显示页面时刷新数据
   useEffect(() => {
@@ -391,15 +380,17 @@ const Index = () => {
         setSelectedStage(index)
         Taro.setStorageSync('selected_age_stage', index.toString())
 
-        // 在对话框中添加年龄段切换提示
-        const stageChangeMessage: ChatMessage = {
-          id: `stage_change_${Date.now()}`,
-          role: 'assistant',
-          content: `已切换到${stageInfo.label}回答模式`,
-          timestamp: new Date().toISOString(),
-          isStageChange: true // 标记为年龄段切换消息
+        // 只有在用户已经开始输入问题后，才显示年龄切换消息
+        if (chatMessages.length > 0) {
+          const stageChangeMessage: ChatMessage = {
+            id: `stage_change_${Date.now()}`,
+            role: 'assistant',
+            content: `已切换到${stageInfo.label}回答模式`,
+            timestamp: new Date().toISOString(),
+            isStageChange: true // 标记为年龄段切换消息
+          }
+          setChatMessages(prev => [...prev, stageChangeMessage])
         }
-        setChatMessages(prev => [...prev, stageChangeMessage])
 
         Taro.showToast({ title: `已切换到${stageInfo.label}`, icon: 'success' })
       }
@@ -412,12 +403,6 @@ const Index = () => {
     try {
       if (!question.trim()) {
         Taro.showToast({ title: '请输入问题', icon: 'none' })
-        return
-      }
-
-      // 检查是否已设置孩子信息
-      if (!childInfo) {
-        Taro.showToast({ title: '请先设置孩子信息', icon: 'none' })
         return
       }
 
@@ -435,11 +420,12 @@ const Index = () => {
       setQuestion('')
 
       // 保存问题
+      const currentStage = AGE_STAGES[selectedStage]
       const questionData = {
         id: userMessage.id,
         content: userQuestion,
-        childName: childInfo.name,
-        childAge: childInfo.age,
+        childName: '小朋友', // 固定称呼，不需要输入名字
+        childAge: currentStage ? `${currentStage.range[0]}-${currentStage.range[1]}岁` : '3-5岁',
         childStage: selectedStage,
         createdAt: userMessage.timestamp
       }
@@ -479,9 +465,9 @@ const Index = () => {
       const answer = await generateChildFriendlyAnswer(
         userQuestion,
         conversationHistory,
-        childInfo.age,
+        `${currentStage.range[0]}-${currentStage.range[1]}岁`,
         selectedStage,
-        childInfo.name
+        '小朋友'
       )
 
       // 更新问题，添加回答
@@ -925,12 +911,13 @@ const Index = () => {
       })
       console.log('==================================')
 
+      const currentStage = AGE_STAGES[selectedStage]
       const answer = await generateChildFriendlyAnswer(
         questionText,
         conversationHistory,
-        childInfo.age,
+        `${currentStage.range[0]}-${currentStage.range[1]}岁`,
         selectedStage,
-        childInfo.name
+        '小朋友'
       )
       console.log('=== AI 回答 ===', answer)
 
@@ -1177,61 +1164,12 @@ const Index = () => {
         </View>
       </View>
 
-      {/* 设置孩子信息弹窗 */}
-      {showSetup && (
-        <View className="setup-modal">
-          <View className="setup-content">
-            <Text className="setup-title">设置孩子信息</Text>
-            <View className="setup-form">
-              <View className="form-item">
-                <Text className="form-label">孩子姓名</Text>
-                <Textarea
-                  className="form-input"
-                  placeholder="请输入孩子的名字"
-                  value={childName}
-                  onInput={(e: any) => setChildName(e.detail.value)}
-                  maxlength={20}
-                  showConfirmBar={false}
-                  disableDefaultPadding
-                />
-              </View>
-              <View className="form-item">
-                <Text className="form-label">孩子年龄（3-12岁）</Text>
-                <Textarea
-                  className="form-input"
-                  placeholder="请输入孩子的年龄"
-                  value={childAge}
-                  onInput={(e: any) => setChildAge(e.detail.value)}
-                  maxlength={2}
-                  showConfirmBar={false}
-                  disableDefaultPadding
-                />
-              </View>
-            </View>
-            <View className="setup-buttons">
-              <Button
-                className="setup-btn cancel-btn"
-                onClick={() => setShowSetup(false)}
-              >
-                取消
-              </Button>
-              <Button
-                className="setup-btn confirm-btn"
-                onClick={handleSetupChild}
-              >
-                确定
-              </Button>
-            </View>
-          </View>
-        </View>
-      )}
-
       {/* 儿童信息卡片 */}
       <View className="kid-info-card">
         {/* 头部信息 */}
         <View className="kid-header">
           <View className="product-slogan">
-            Big questions deserve Little answers <Text className="star-large">✦</Text><Text className="star-small">✦</Text>
+            Big questions deserve Little{'\n'}answers <Text className="star-large">✦</Text><Text className="star-small">✦</Text>
           </View>
           <View
             className="parent-center-btn"
@@ -1411,95 +1349,94 @@ const Index = () => {
 
       {/* 底部输入区域 */}
       <View className="input-section">
-        {/* 语音输入模式（默认） */}
-        {inputMode === 'voice' ? (
-          <View className="voice-input-wrapper">
-            <View className="voice-input-content">
-              {recognitionProgress ? (
-                /* 识别中状态 */
-                <View className="recognition-progress">
-                  <Text className="recognition-icon">🔄</Text>
-                  <Text className="recognition-text">识别中...</Text>
+        <View className="input-container">
+          {/* 模式切换按钮 - 始终在最左侧 */}
+          <View className="input-mode-toggle" onClick={handleToggleInputMode}>
+            <Image className="toggle-icon-image" src={inputMode === 'voice' ? keyboardIcon : micIcon} />
+          </View>
+
+          {/* 输入区域 - 语音或文字 */}
+          <View className="input-area">
+            {/* 语音输入模式（默认） */}
+            {inputMode === 'voice' ? (
+              <View className="voice-input-wrapper">
+                <View className="voice-input-content">
+                  {recognitionProgress ? (
+                    /* 识别中状态 */
+                    <View className="recognition-progress">
+                      <Text className="recognition-icon">🔄</Text>
+                      <Text className="recognition-text">识别中...</Text>
+                    </View>
+                  ) : isRecording ? (
+                    /* 录音中状态 */
+                    <View
+                      className="recording-status"
+                      onTouchStart={handleVoiceTouchStart}
+                      onTouchMove={handleVoiceTouchMove}
+                      onTouchEnd={handleVoiceTouchEnd}
+                    >
+                      {/* 录音波形动画 - 5条白色竖线 */}
+                      <View className="waveform-container">
+                        {Array.from({ length: 5 }).map((_, i) => (
+                          <View
+                            key={i}
+                            className={`wave-bar ${currentVolume > 0.3 ? 'active' : ''}`}
+                            style={{
+                              height: `${8 + (i % 3) * 8}px`,
+                              animationDelay: `${i * 0.1}s`
+                            }}
+                          />
+                        ))}
+                      </View>
+                      <Text className="recording-text">
+                        {isCancelingRecording ? '松手取消' : '松开发送'}
+                      </Text>
+                      <Text className="recording-time">{formatRecordingTime(recordingTime)}</Text>
+                    </View>
+                  ) : (
+                    /* 默认状态：按住说话 */
+                    <View
+                      className="voice-prompt"
+                      onTouchStart={handleVoiceTouchStart}
+                      onTouchMove={handleVoiceTouchMove}
+                      onTouchEnd={handleVoiceTouchEnd}
+                    >
+                      <Image className="voice-prompt-icon-image" src={micIcon} />
+                      <Text className="voice-prompt-text">按住说话</Text>
+                    </View>
+                  )}
                 </View>
-              ) : isRecording ? (
-                /* 录音中状态 */
-                <View
-                  className="recording-status"
-                  onTouchStart={handleVoiceTouchStart}
-                  onTouchMove={handleVoiceTouchMove}
-                  onTouchEnd={handleVoiceTouchEnd}
-                >
-                  {/* 录音波形动画 - 5条白色竖线 */}
-                  <View className="waveform-container">
-                    {Array.from({ length: 5 }).map((_, i) => (
-                      <View
-                        key={i}
-                        className={`wave-bar ${currentVolume > 0.3 ? 'active' : ''}`}
-                        style={{
-                          height: `${8 + (i % 3) * 8}px`,
-                          animationDelay: `${i * 0.1}s`
-                        }}
-                      />
-                    ))}
-                  </View>
-                  <Text className="recording-text">
-                    {isCancelingRecording ? '松手取消' : '松开发送'}
-                  </Text>
-                  <Text className="recording-time">{formatRecordingTime(recordingTime)}</Text>
-                </View>
-              ) : (
-                /* 默认状态：按住说话 */
-                <View
-                  className="voice-prompt"
-                  onTouchStart={handleVoiceTouchStart}
-                  onTouchMove={handleVoiceTouchMove}
-                  onTouchEnd={handleVoiceTouchEnd}
-                >
-                  <Image className="voice-prompt-icon-image" src={micWhiteIcon} />
-                  <Text className="voice-prompt-text">按住说话</Text>
-                </View>
-              )}
-            </View>
-            {/* 只在非录音时才显示模式切换按钮 */}
-            {!isRecording && (
-              <View className="input-mode-toggle" onClick={handleToggleInputMode}>
-                <Image className="icon-image" src={keyboardIcon} />
+              </View>
+            ) : (
+              /* 文字输入模式 */
+              <View className="input-wrapper">
+                <Textarea
+                  className="question-input"
+                  placeholder="输入你的问题..."
+                  value={question}
+                  onInput={handleInputChange}
+                  maxlength={500}
+                  showConfirmBar={false}
+                  adjustPosition
+                  disableDefaultPadding
+                />
               </View>
             )}
           </View>
-        ) : (
-          /* 文字输入模式 */
-          <View className="input-wrapper">
-            <Textarea
-              className="question-input"
-              placeholder="在这里写下你的问题"
-              value={question}
-              onInput={handleInputChange}
-              maxlength={500}
-              autoHeight
-              showConfirmBar={false}
-              adjustPosition
-              disableDefaultPadding
-            />
-            {question.trim() && (
-              <Text className="char-count">{question.length}/500</Text>
-            )}
-            <View className="input-mode-toggle" onClick={handleToggleInputMode}>
-              <Image className="icon-image" src={micIcon} />
-            </View>
-          </View>
-        )}
 
-        {/* 只在文字输入模式时显示发送按钮 */}
-        {inputMode === 'text' && (
-          <Button
-            className="submit-button"
-            onClick={handleSubmit}
-            disabled={isSubmitting || !question.trim()}
-          >
-            {isSubmitting ? '...' : '发送'}
-          </Button>
-        )}
+          {/* 发送按钮 - 只在文字输入模式时显示 */}
+          {inputMode === 'text' && (
+            <View className="submit-button-wrapper">
+              <Button
+                className="submit-button"
+                onClick={handleSubmit}
+                disabled={isSubmitting || !question.trim()}
+              >
+                <Image className="submit-button-icon" src={sendIcon} />
+              </Button>
+            </View>
+          )}
+        </View>
       </View>
     </View>
   )

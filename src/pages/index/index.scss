@@ -2,6 +2,9 @@
   // 白色渐变背景（整体页面背景）
   background: linear-gradient(180deg, #faf5ff 0%, #ffffff 100%);
   min-height: 100vh;
+  width: 100%;
+  box-sizing: border-box;
+  overflow-x: hidden;
   // padding-top 通过内联样式动态设置
 }
 
@@ -46,7 +49,7 @@
 /* 儿童信息卡片 */
 .kid-info-card {
   background: linear-gradient(135deg, #FF9ACD 0%, #9FC5FF 100%);
-  padding: 40px 20px;
+  padding: 50px 20px;
   color: white;
 }
 
@@ -54,11 +57,11 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 20px;
+  margin-bottom: 30px;
 }
 
 .product-slogan {
-  font-size: 30px;
+  font-size: 36px;
   font-weight: 600;
   letter-spacing: 0.8px;
   opacity: 0.95;
@@ -68,6 +71,8 @@
   line-height: 1.3;
   word-wrap: break-word;
   word-break: break-word;
+  white-space: pre-wrap;
+  margin: 10px 0;
 }
 
 .star-large {
@@ -88,14 +93,13 @@
   justify-content: center;
   gap: 4px;
   background: rgba(255, 255, 255, 0.2);
-  padding: 12px 20px;
+  padding: 20px 30px;
   border-radius: 16px;
   cursor: pointer;
   transition: all 0.2s;
   border: none;
   color: white;
   box-sizing: border-box;
-  min-width: 100px;
 
   &:active {
     transform: scale(0.95);
@@ -108,7 +112,7 @@
 }
 
 .parent-text {
-  font-size: 16px;
+  font-size: 22px;
   font-weight: 500;
   line-height: 1;
 }
@@ -116,24 +120,24 @@
 /* 年龄段选择器 */
 .age-selector {
   display: flex;
-  gap: 6px;
+  gap: 14px;
   margin: 0;
   padding: 0;
 }
 
 .age-option {
   flex: 1;
-  min-width: 82px;
+  min-width: 60px;
   background: rgba(255, 255, 255, 0.15);
   border: 2px solid transparent;
   border-radius: 12px;
-  padding: 10px 6px;
+  padding: 6px 2px;
   cursor: pointer;
   transition: all 0.2s;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: 2px;
   margin: 0;
 
   &.active {
@@ -150,14 +154,14 @@
 }
 
 .age-emoji {
-  font-size: 32px;
+  font-size: 29px;
   color: #fff;
   margin: 0;
   padding: 0;
 }
 
 .age-range {
-  font-size: 18px;
+  font-size: 26px;
   font-weight: 600;
   text-align: center;
   color: #fff;
@@ -166,7 +170,7 @@
 }
 
 .age-description {
-  font-size: 14px;
+  font-size: 18px;
   text-align: center;
   opacity: 0.9;
   line-height: 1.2;
@@ -333,15 +337,6 @@
   transition: all 0.3s ease;
 }
 
-.age-range {
-  font-size: 22px;
-  color: #fff;
-  font-weight: 600;
-  transition: all 0.3s ease;
-  text-align: center;
-  opacity: 0.9;
-}
-
 .age-desc {
   font-size: 18px;
   color: #fff;
@@ -385,13 +380,18 @@
 .chat-section {
   flex: 1;
   background: transparent;
-  padding: 20px;
+  padding-top: 20px;
+  padding-right: 20px;
+  padding-bottom: 20px;
+  padding-left: 20px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 16px;
   margin-bottom: 20px;
   min-height: 400px;
+  box-sizing: border-box;
+  width: 100%;
 }
 
 /* 建议问题区域 */
@@ -402,30 +402,31 @@
 }
 
 .questions-title {
-  font-size: 15px;
+  font-size: 29px;
   color: #666;
   text-align: center;
-  margin-bottom: 8px;
+  margin-bottom: 19px;
   font-weight: 500;
 }
 
 .questions-grid {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 16px;
 }
 
 .question-card {
   background: white;
-  border: 1.5px solid #E8E8E8;
+  border: 3px solid #E8E8E8;
   border-radius: 16px;
-  padding: 14px 12px;
-  font-size: 13px;
+  padding: 26px 16px;
+  font-size: 24px;
   color: #444;
   text-align: center;
   cursor: pointer;
   transition: all 0.2s;
   line-height: 1.4;
+  box-sizing: border-box;
 
   &:active {
     background: linear-gradient(135deg, #FF9ACD 0%, #9FC5FF 100%);
@@ -744,57 +745,68 @@
   bottom: 0;
   left: 0;
   right: 0;
-  background: rgba(255, 255, 255, 0.98);
-  border-top: 2px solid #f0f0f0;
-  padding: 20px 24px;
-  padding-bottom: calc(20px + env(safe-area-inset-bottom));
+  background: #f5f5f5;
+  border-top: none;
+  padding: 18px 14px;
+  padding-bottom: calc(18px + env(safe-area-inset-bottom));
   display: flex;
-  align-items: flex-end;
-  gap: 16px;
-  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.08);
+  align-items: center;
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.06);
   z-index: 100;
 }
 
-.input-wrapper {
-  flex: 1;
-  position: relative;
-  background: #fff;
-  border: 2px solid #e9ecef;
-  border-radius: 24px;
-  padding: 16px 20px;
-  transition: all 0.3s ease;
-
-  &:focus-within {
-    border-color: #6ba3f5;
-    box-shadow: 0 0 12px rgba(107, 163, 245, 0.12);
-  }
+/* 输入容器 - 参考原型文件 */
+.input-container {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  background: #f5f5f5;
+  padding: 12px;
+  border-radius: 28px;
 }
 
-/* 输入模式切换按钮 - 圆角矩形，在语音按钮内部 */
-.input-mode-toggle {
-  position: absolute;
-  top: 20px;  /* 上边距：20px */
-  right: 20px;  /* 右边距：20px */
-  width: 64px;  /* 宽度 */
-  height: 88px; /* 高度：128 - 20(上) - 20(下) = 88px (包含3px双边框) */
+/* 输入区域 - 参考原型文件 */
+.input-area {
+  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #fff;
-  border: 3px solid #adb5bd; /* 灰色边框 */
-  border-radius: 14px; /* 圆角矩形 */
+}
+
+.input-wrapper {
+  width: 100%;
+  position: relative;
+  background: transparent;
+  border: none;
+  padding: 0;
+  transition: all 0.3s ease;
+
+  &:focus-within {
+    border-color: transparent;
+    box-shadow: none;
+  }
+}
+
+/* 输入模式切换按钮 */
+.input-mode-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 88px;
+  height: 88px;
+  background: white;
+  border: none;
+  border-radius: 50%;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  color: #adb5bd; /* 灰色 */
+  color: #666;
   flex-shrink: 0;
-  box-shadow: 0 2px 8px rgba(173, 181, 189, 0.2);
-  z-index: 1; /* 确保在语音按钮上层 */
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 
   &:active {
-    transform: scale(0.94);
-    background: #f8f9fa;
-    border-color: #6ba3f5; /* 点击时变蓝色 */
-    color: #6ba3f5;
-    box-shadow: 0 2px 6px rgba(107, 163, 245, 0.2);
+    transform: scale(1.05);
+    background: #f8f8f8;
   }
 }
 
@@ -817,9 +829,10 @@
 }
 
 .toggle-icon-image {
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   display: block;
+  color: currentColor;
 }
 
 .toggle-icon {
@@ -837,20 +850,20 @@
 /* 语音输入区域 - 扁平简洁设计 */
 /* 语音输入区域 - 粉蓝渐变设计 */
 .voice-input-wrapper {
-  flex: 1;
+  width: 100%;
   display: flex;
   align-items: center;
   position: relative;
-  background: linear-gradient(135deg, #FF9ACD 0%, #9FC5FF 100%);
+  background: white;
   border: none;
-  border-radius: 40px;
+  border-radius: 24px;
   overflow: hidden;
-  height: 128px;
+  height: 88px;
   transition: all 0.2s ease;
-  box-shadow: 0 6px 16px rgba(255, 154, 205, 0.3);
 }
 
 .voice-input-wrapper.recording {
+  background: linear-gradient(135deg, #FF9ACD 0%, #9FC5FF 100%);
   animation: pulse-recording 1.5s ease-in-out infinite;
 }
 
@@ -939,15 +952,15 @@
 }
 
 .recording-text {
-  font-size: 26px; /* 增大 */
+  font-size: 32px;
   color: #fff;
-  font-weight: 600;
-  letter-spacing: 0.5px;
+  font-weight: 400;
+  letter-spacing: 0;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
 .recording-time {
-  font-size: 36px; /* 增大 */
+  font-size: 32px;
   color: #fff;
   font-weight: 700;
   font-family: monospace;
@@ -1020,19 +1033,20 @@
   }
 }
 
-/* 按住说话 - 蓝粉渐变配白色icon */
+/* 按住说话 - 参考原型文件 */
 .voice-prompt {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
-  padding: 16px 24px;
+  gap: 8px;
+  padding: 0;
   width: 100%;
+  height: 88px;
   cursor: pointer;
   transition: all 0.2s ease;
 
   &:active {
-    background: rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.8);
   }
 
   &::after {
@@ -1044,40 +1058,56 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
-  font-size: 44px;
+  color: #666;
+  font-size: 40px;
   filter: none;
 
   .icon-image {
-    width: 56px;
-    height: 56px;
+    width: 40px;
+    height: 40px;
   }
 
   .custom-icon {
-    width: 56px;
-    height: 56px;
+    width: 40px;
+    height: 40px;
+    color: #666;
+  }
+}
+
+.voice-input-wrapper.recording .voice-prompt-icon {
+  color: #fff;
+
+  .custom-icon {
     color: #fff;
   }
 }
 
 .voice-prompt-icon-image {
-  width: 48px;
-  height: 48px;
+  width: 40px;
+  height: 40px;
   display: block;
+  color: #666;
+}
+
+.voice-input-wrapper.recording .voice-prompt-icon-image {
+  color: #fff;
 }
 
 .voice-prompt-image {
-  width: 48px;
-  height: 48px;
+  width: 40px;
+  height: 40px;
   display: block;
 }
 
 .voice-prompt-text {
-  font-size: 24px;
-  color: #fff;
+  font-size: 28px;
+  color: #333;
   font-weight: 600;
-  letter-spacing: 0.5px;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  letter-spacing: 0;
+}
+
+.voice-input-wrapper.recording .voice-prompt-text {
+  color: white;
 }
 
 /* 录音状态 - 显示波形和松开发送 */
@@ -1092,11 +1122,16 @@
 
 .question-input {
   width: 100%;
-  font-size: 26px;
+  font-size: 32px;
   color: #212529;
-  line-height: 1.5;
-  min-height: 40px;
-  max-height: 200px;
+  line-height: 1.2;
+  padding: 24px 28px;
+  height: 88px;
+  background: white;
+  border: none;
+  border-radius: 24px;
+  outline: none;
+  box-sizing: border-box;
 }
 
 .char-count {
@@ -1107,36 +1142,39 @@
   color: #adb5bd;
 }
 
+/* 发送按钮容器 */
+.submit-button-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
 .submit-button {
-  width: 130px;
-  height: 76px;
+  width: 88px;
+  height: 88px;
   background: linear-gradient(135deg, #9FC5FF 0%, #B0D0FF 100%);
   border: none;
-  border-radius: 24px;
+  border-radius: 50%;
   color: #fff;
-  font-size: 26px;
-  font-weight: 700;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   box-shadow: 0 2px 8px rgba(159, 197, 255, 0.3);
-
-  &:not([disabled]):active {
-    transform: scale(0.95);
-    box-shadow: 0 1px 4px rgba(159, 197, 255, 0.2);
-  }
-
-  &[disabled] {
-    background: #f8f9fa;
-    color: #adb5bd;
-    box-shadow: none;
-  }
+  padding: 0;
+  line-height: 1;
 
   &::after {
     border: none;
   }
+}
+
+.submit-button-icon {
+  width: 44px;
+  height: 44px;
+  display: block;
 }
 
 /* 设置孩子信息弹窗 */
