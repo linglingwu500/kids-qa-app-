@@ -1,5 +1,5 @@
 .parent-page {
-  background: linear-gradient(180deg, #e8f4ff, #fff9f0);
+  background: linear-gradient(180deg, #faf5ff 0%, #ffffff 100%);
   min-height: 100vh;
   padding-bottom: 40px;
   box-sizing: border-box;
@@ -7,18 +7,55 @@
 
 /* 顶部信息区域 */
 .header-section {
-  background: rgba(255, 255, 255, 0.95);
-  border-bottom: 3px solid #4a90e2;
-  padding: 40px 24px 30px;
-  box-shadow: 0 4px 12px rgba(74, 144, 226, 0.15);
+  background: linear-gradient(135deg, #FF9ACD 0%, #9FC5FF 100%);
+  border-bottom: none;
+  padding: 30px 24px;
+  box-shadow: 0 4px 12px rgba(255, 154, 205, 0.2);
+}
+
+.header-with-back {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.back-button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 16px;
+  background: rgba(255, 255, 255, 0.25);
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:active {
+    background: rgba(255, 255, 255, 0.35);
+    transform: scale(0.95);
+  }
+}
+
+.back-icon {
+  font-size: 32px;
+  color: #fff;
+  font-weight: bold;
+  line-height: 1;
+}
+
+.back-text {
+  font-size: 24px;
+  color: #fff;
+  font-weight: 600;
 }
 
 .header-title {
   font-size: 40px;
   font-weight: bold;
-  color: #4a90e2;
-  margin-bottom: 20px;
-  display: block;
+  color: #fff;
+  flex: 1;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .child-info {
@@ -30,30 +67,32 @@
 
 .child-name {
   font-size: 28px;
-  color: #333;
+  color: #fff;
   font-weight: 600;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
 .child-age {
   font-size: 24px;
-  color: #666;
-  background: #f0f0f0;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.25);
   padding: 4px 12px;
   border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
 }
 
 .header-subtitle {
   font-size: 26px;
-  color: #999;
+  color: rgba(255, 255, 255, 0.9);
   display: block;
 }
 
 /* Tab 切换 */
 .tab-section {
   display: flex;
-  background: rgba(255, 255, 255, 0.98);
-  border-bottom: 3px solid #e0e0e0;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  background: rgba(255, 255, 255, 0.95);
+  border-bottom: 2px solid rgba(255, 154, 205, 0.2);
+  box-shadow: 0 2px 8px rgba(255, 154, 205, 0.1);
   position: sticky;
   top: 0;
   z-index: 10;
@@ -69,7 +108,7 @@
   transition: all 0.3s ease;
 
   &.active {
-    color: #ff6b9d;
+    color: #FF9ACD;
 
     &::after {
       content: '';
@@ -78,7 +117,7 @@
       left: 20%;
       right: 20%;
       height: 4px;
-      background: #ff6b9d;
+      background: linear-gradient(90deg, #FF9ACD, #9FC5FF);
       border-radius: 2px;
     }
   }
@@ -90,7 +129,7 @@
   font-weight: 600;
 
   .active & {
-    color: #ff6b9d;
+    color: #FF9ACD;
   }
 }
 
@@ -100,7 +139,7 @@
   margin-top: 6px;
 
   .active & {
-    color: #ff6b9d;
+    color: #FF9ACD;
   }
 }
 
@@ -139,11 +178,11 @@
 
 .question-card {
   background: rgba(255, 255, 255, 0.95);
-  border: 3px solid #4a90e2;
+  border: 2px solid rgba(255, 154, 205, 0.3);
   border-radius: 16px;
   padding: 24px;
   margin-bottom: 20px;
-  box-shadow: 0 4px 12px rgba(74, 144, 226, 0.1);
+  box-shadow: 0 4px 12px rgba(255, 154, 205, 0.15);
 }
 
 .question-header {
@@ -239,8 +278,8 @@
 .analyze-button {
   width: 200px;
   height: 80px;
-  background: linear-gradient(135deg, #4a90e2, #6ab0f3);
-  border: 3px solid #3a7bc8;
+  background: linear-gradient(135deg, #FF9ACD 0%, #9FC5FF 100%);
+  border: none;
   border-radius: 20px;
   color: #fff;
   font-size: 28px;
@@ -248,31 +287,37 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  box-shadow: 0 4px 12px rgba(255, 154, 205, 0.3);
 
   &[disabled] {
     background: #e0e0e0;
     border-color: #ccc;
     color: #999;
+    box-shadow: none;
   }
 
   &::after {
     border: none;
   }
+
+  &:active {
+    transform: scale(0.95);
+  }
 }
 
 .analysis-card {
   background: rgba(255, 255, 255, 0.95);
-  border: 3px solid #ff6b9d;
+  border: 2px solid rgba(255, 154, 205, 0.3);
   border-radius: 16px;
   padding: 24px;
   margin-bottom: 20px;
-  box-shadow: 0 4px 12px rgba(255, 107, 157, 0.1);
+  box-shadow: 0 4px 12px rgba(255, 154, 205, 0.15);
 }
 
 .card-title {
   font-size: 30px;
   font-weight: bold;
-  color: #ff6b9d;
+  color: #FF9ACD;
   margin-bottom: 16px;
   display: block;
 }
@@ -280,15 +325,15 @@
 .section-subtitle {
   font-size: 26px;
   font-weight: 600;
-  color: #4a90e2;
+  color: #9FC5FF;
   margin: 20px 0 12px;
   display: block;
 }
 
 /* 兴趣领域 */
 .interest-overview {
-  background: rgba(74, 144, 226, 0.05);
-  border-left: 4px solid #4a90e2;
+  background: rgba(255, 154, 205, 0.08);
+  border-left: 4px solid #FF9ACD;
   padding: 16px;
   border-radius: 10px;
   margin-bottom: 16px;
@@ -297,7 +342,7 @@
 .overview-label {
   font-size: 22px;
   font-weight: 600;
-  color: #4a90e2;
+  color: #FF9ACD;
   margin-bottom: 8px;
   display: block;
 }
@@ -329,7 +374,7 @@
 
 .interest-dot {
   font-size: 24px;
-  color: #ffc107;
+  color: #FF9ACD;
   margin-right: 12px;
   flex-shrink: 0;
   font-weight: bold;
@@ -357,15 +402,15 @@
   display: flex;
   align-items: flex-start;
   padding: 16px;
-  background: linear-gradient(135deg, rgba(255, 107, 157, 0.05), rgba(255, 157, 185, 0.05));
-  border-left: 4px solid #ff6b9d;
+  background: linear-gradient(135deg, rgba(255, 154, 205, 0.08), rgba(159, 197, 255, 0.08));
+  border-left: 4px solid #FF9ACD;
   border-radius: 10px;
 }
 
 .personality-number {
   width: 40px;
   height: 40px;
-  background: linear-gradient(135deg, #ff6b9d, #ff9db9);
+  background: linear-gradient(135deg, #FF9ACD, #9FC5FF);
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -391,8 +436,8 @@
 
 /* 推荐内容 */
 .recommend-overview {
-  background: rgba(74, 144, 226, 0.05);
-  border-left: 4px solid #4a90e2;
+  background: rgba(255, 154, 205, 0.08);
+  border-left: 4px solid #FF9ACD;
   padding: 16px;
   border-radius: 10px;
   margin-bottom: 20px;
@@ -413,25 +458,24 @@
 
 .recommend-header {
   display: flex;
-  justify-content: flex-start;
   align-items: center;
   margin-bottom: 12px;
   flex-wrap: wrap;  // 允许换行
-  gap: 8px;        // 换行时的间距
 }
 
 .recommend-title {
   font-size: 26px;
   font-weight: bold;
   color: #333;
-  flex: 0 1 auto;  // 可增长、可收缩，但不强制占据所有空间
+  flex: 0 1 auto;  // 自动增长，但不占据全部空间
   min-width: 0;  // 允许文本正确换行
   word-break: break-word;  // 在单词边界换行
   overflow-wrap: break-word;  // 长单词换行
+  margin-right: 8px;  // 与年龄段徽章的间距
 }
 
 .recommend-age-badge {
-  background: linear-gradient(135deg, #4a90e2, #6ab0f3);
+  background: rgba(255, 154, 205, 0.2);
   padding: 6px 16px;
   border-radius: 12px;
   flex-shrink: 0;    // 不缩小
@@ -439,7 +483,7 @@
 
 .age-text {
   font-size: 20px;
-  color: #fff;
+  color: #FF9ACD;
   font-weight: 600;
 }
 
@@ -452,7 +496,7 @@
 .reason-label {
   font-size: 22px;
   font-weight: 600;
-  color: #ffc107;
+  color: #FF9ACD;
   margin-bottom: 6px;
   display: block;
 }
@@ -471,15 +515,15 @@
 }
 
 .tag-item {
-  background: rgba(255, 107, 157, 0.1);
-  border: 2px solid #ff9db9;
+  background: rgba(255, 154, 205, 0.15);
+  border: 2px solid rgba(255, 154, 205, 0.3);
   border-radius: 12px;
   padding: 10px 20px;
 }
 
 .tag-text {
   font-size: 24px;
-  color: #ff6b9d;
+  color: #FF9ACD;
 }
 
 .traits-list {
@@ -498,7 +542,7 @@
 
 .trait-dot {
   font-size: 24px;
-  color: #ffc107;
+  color: #FF9ACD;
   margin-right: 12px;
   flex-shrink: 0;
 }
@@ -514,7 +558,7 @@
   color: #666;
   line-height: 1.6;
   padding: 12px 16px;
-  background: rgba(74, 144, 226, 0.05);
+  background: rgba(255, 154, 205, 0.08);
   border-radius: 10px;
   display: block;
 }
@@ -534,7 +578,7 @@
 
 .suggestion-num {
   font-size: 24px;
-  color: #4a90e2;
+  color: #FF9ACD;
   font-weight: bold;
   flex-shrink: 0;
 }
@@ -554,7 +598,7 @@
 .section-title {
   font-size: 32px;
   font-weight: bold;
-  color: #4a90e2;
+  color: #FF9ACD;
   margin-bottom: 20px;
   display: block;
 }
@@ -567,15 +611,15 @@
 
 .recommendation-card {
   background: rgba(255, 255, 255, 0.95);
-  border: 3px solid #4a90e2;
+  border: 2px solid rgba(255, 154, 205, 0.3);
   border-radius: 16px;
   padding: 24px;
-  box-shadow: 0 4px 12px rgba(74, 144, 226, 0.1);
+  box-shadow: 0 4px 12px rgba(255, 154, 205, 0.15);
   transition: all 0.2s ease;
 
   &:active {
     transform: scale(0.98);
-    box-shadow: 0 2px 8px rgba(74, 144, 226, 0.15);
+    box-shadow: 0 2px 8px rgba(255, 154, 205, 0.2);
   }
 }
 
@@ -588,7 +632,7 @@
 
 .rec-type-badge {
   font-size: 22px;
-  background: linear-gradient(135deg, #ff6b9d, #ff9db9);
+  background: linear-gradient(135deg, #FF9ACD, #9FC5FF);
   color: #fff;
   padding: 6px 16px;
   border-radius: 12px;
@@ -628,8 +672,8 @@
 
 .rec-tag {
   font-size: 20px;
-  color: #4a90e2;
-  background: rgba(74, 144, 226, 0.08);
+  color: #FF9ACD;
+  background: rgba(255, 154, 205, 0.12);
   padding: 4px 12px;
   border-radius: 8px;
 }
@@ -675,10 +719,10 @@
 .reanalyze-button {
   width: 200px;
   height: 70px;
-  background: rgba(74, 144, 226, 0.1);
-  border: 3px solid #4a90e2;
+  background: rgba(255, 154, 205, 0.15);
+  border: 2px solid #FF9ACD;
   border-radius: 16px;
-  color: #4a90e2;
+  color: #FF9ACD;
   font-size: 26px;
   font-weight: 600;
   display: inline-flex;
@@ -686,7 +730,7 @@
   justify-content: center;
 
   &:active {
-    background: rgba(74, 144, 226, 0.15);
+    background: rgba(255, 154, 205, 0.25);
   }
 
   &[disabled] {

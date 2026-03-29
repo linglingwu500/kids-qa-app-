@@ -598,22 +598,21 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 16px 24px;
-  margin: 16px 0;
-  background: linear-gradient(135deg, #ffe5f0 0%, #e8f4ff 100%);
-  border-radius: 20px;
-  border: 2px solid #f8b4d9;
-  box-shadow: 0 4px 12px rgba(248, 180, 217, 0.15);
+  padding: 8px 16px;
+  margin: 8px 0;
+  background: transparent;
+  border-radius: 12px;
 
   .stage-change-icon {
-    font-size: 32px;
-    margin-right: 12px;
+    font-size: 24px;
+    margin-right: 8px;
+    opacity: 0.5;
   }
 
   .stage-change-text {
-    font-size: 26px;
-    color: #6ba3f5;
-    font-weight: 600;
+    font-size: 22px;
+    color: #666;
+    font-weight: 400;
   }
 }
 

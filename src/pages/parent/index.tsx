@@ -23,6 +23,19 @@ const Parent = () => {
   const [recommendations, setRecommendations] = useState<Recommendation[]>([])
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [lastAnalysisQuestionCount, setLastAnalysisQuestionCount] = useState(0) // 记录上次分析时的问题数量
+  const [statusBarHeight, setStatusBarHeight] = useState(44) // 状态栏高度
+
+  // 获取系统信息（状态栏高度）
+  useEffect(() => {
+    try {
+      const systemInfo = Taro.getSystemInfoSync()
+      console.log('系统信息:', systemInfo)
+      setStatusBarHeight(systemInfo.statusBarHeight || 44)
+    } catch (error) {
+      console.error('获取系统信息失败:', error)
+      setStatusBarHeight(44)
+    }
+  }, [])
 
   // 清理文本中的 Markdown 加粗标记 **，并返回清理后的文本
   const cleanMarkdownBold = (text: string): string => {
@@ -135,11 +148,22 @@ const Parent = () => {
     }
   }
 
+  // 返回聊天页面
+  const handleBack = () => {
+    Taro.navigateBack()
+  }
+
   return (
-    <View className="parent-page">
+    <View className="parent-page" style={{ paddingTop: `${statusBarHeight}px` }}>
       {/* 顶部信息区域 */}
       <View className="header-section">
-        <Text className="header-title">家长中心</Text>
+        <View className="header-with-back">
+          <View className="back-button" onClick={handleBack}>
+            <Text className="back-icon">‹</Text>
+            <Text className="back-text">返回</Text>
+          </View>
+          <Text className="header-title">家长中心</Text>
+        </View>
         {childInfo && (
           <View className="child-info">
             <Text className="child-name">{childInfo.name}</Text>
