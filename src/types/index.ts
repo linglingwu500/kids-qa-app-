@@ -2,6 +2,7 @@
 export interface ChildInfo {
   name: string
   age: number
+  stage?: number  // 年龄阶段：0=3-5岁, 1=6-7岁, 2=8-9岁, 3=10-12岁
   avatar?: string
   createdAt: string
 }

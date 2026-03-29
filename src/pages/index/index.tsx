@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { View, Text, Textarea, Button, ScrollView, Canvas, Image } from '@tarojs/components'
 import Taro, { useRouter } from '@tarojs/taro'
-import { getChildInfo, saveQuestion, updateQuestionWithAnswer } from '../../store/child'
+import { getChildInfo, saveChildInfo, saveQuestion, updateQuestionWithAnswer } from '../../store/child'
 import { generateChildFriendlyAnswer } from '../../services/ai'
 import { formatRelativeTime } from '../../utils/format'
 import { voiceService, ASRResult } from '../../services/voice'
@@ -53,11 +53,15 @@ interface ChatMessage {
 }
 
 const Index = () => {
-  const childInfoData = getChildInfo()
+  // 先初始化年龄段选择
+  const [selectedStage, setSelectedStage] = useState<number>(0) // 默认选中"3-5岁"
+
+  // 根据选择的年龄段获取/初始化孩子信息
+  const childInfoData = getChildInfo(selectedStage)
   const [childInfo, setChildInfo] = useState<ChildInfo | null>(childInfoData)
+
   const [question, setQuestion] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [selectedStage, setSelectedStage] = useState<number>(0) // 默认选中"3-5岁"
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
   const [scrollTop, setScrollTop] = useState(0)
   const [shouldResetHistory, setShouldResetHistory] = useState(false) // 是否需要重置对话历史
@@ -70,7 +74,6 @@ const Index = () => {
   const [isRecording, setIsRecording] = useState(false)
   const [recordingTime, setRecordingTime] = useState(0)
   const [recordingTimer, setRecordingTimer] = useState<NodeJS.Timeout | null>(null)
-  const [recognitionProgress, setRecognitionProgress] = useState(false)
   const [currentVolume, setCurrentVolume] = useState(0) // 当前音量（0-1）
   const [volumeHistory, setVolumeHistory] = useState<number[]>([]) // 音量历史，用于波形显示
   const [isCancelingRecording, setIsCancelingRecording] = useState(false) // 是否正在上滑取消录音
@@ -79,6 +82,8 @@ const Index = () => {
   // 使用 useRef 来同步状态，避免 useState 异步更新的问题
   const isRecordingRef = React.useRef(false)
   const isCancelingRecordingRef = React.useRef(false)
+  const recordingStartedRef = React.useRef(false) // 跟踪录音是否真的启动成功了
+  const isStoppingRecordingRef = React.useRef(false) // 防止重复停止录音
 
   // 跟踪当前播放的消息（用于在播放结束时触发继续探索问题）
   const currentPlayingMessageRef = React.useRef<ChatMessage | null>(null)
@@ -96,6 +101,9 @@ const Index = () => {
   const [isRealtimeSpeaking, setIsRealtimeSpeaking] = useState(false) // 是否正在播放 AI 回复
 
   const router = useRouter()
+
+  // ScrollView ref，用于滚动控制
+  const scrollViewRef = React.useRef<any>(null)
 
   console.log('=== Index 组件 ===')
 
@@ -153,18 +161,41 @@ const Index = () => {
     }
   }, [])
 
-  // 滚动到底部
-  useEffect(() => {
-    try {
-      if (chatMessages.length > 0) {
-        setTimeout(() => {
-          setScrollTop(99999)
-        }, 100)
-      }
-    } catch (error) {
-      console.error('滚动失败:', error)
+  // ========== 自动滚动功能 ==========
+
+  // 精确滚动到底部，让最后一条消息刚好完整显示
+  const scrollToBottom = React.useCallback(() => {
+    Taro.createSelectorQuery()
+      .select('.chat-section')
+      .scrollOffset()
+      .exec((res) => {
+        if (res && res[0]) {
+          const { scrollHeight } = res[0]
+
+          // 简化计算：
+          // 占位符高度 120px
+          // 最后一条消息底部需要距离输入框顶部约 20px
+          // 所以滚动位置 = scrollHeight - 120 + 20 = scrollHeight - 100
+          const spacerHeight = 120 // 占位符高度
+          const bottomMargin = 20 // 最后一条消息底部间距
+          const targetScrollTop = scrollHeight - spacerHeight + bottomMargin + Date.now() % 100
+
+          console.log(`[滚动] scrollHeight: ${scrollHeight}, targetScrollTop: ${targetScrollTop}`)
+          setScrollTop(targetScrollTop)
+        }
+      })
+  }, [])
+
+  // 监听消息变化，自动滚动
+  React.useEffect(() => {
+    if (chatMessages.length > 0) {
+      // 延迟滚动，等待DOM渲染完成
+      setTimeout(() => {
+        scrollToBottom()
+      }, 200)
     }
-  }, [chatMessages.length])
+  }, [chatMessages.length, scrollToBottom])
+  // ========== 自动滚动功能结束 ==========
 
   // 监听语音播放状态变化
   useEffect(() => {
@@ -191,15 +222,15 @@ const Index = () => {
           prev.map(m => ({ ...m, isPlaying: false }))
         )
 
-        // 检查是否需要播放继续探索问题
+        // 检查是否需要播放继续探索问题（只播放第一个）
         const lastMessage = currentPlayingMessageRef.current
         if (lastMessage &&
             lastMessage.role === 'assistant' &&
             lastMessage.curiosityQuestions &&
             lastMessage.curiosityQuestions.length > 0) {
-          // 播放第一个继续探索问题
+          // 只播放第一个继续探索问题
           const firstQuestion = lastMessage.curiosityQuestions[0]
-          console.log('=== 播放继续探索问题 ===', firstQuestion)
+          console.log('=== 播放继续探索问题（第一个） ===', firstQuestion)
 
           // 添加一个小延迟，让用户感受到回答已经结束
           setTimeout(() => {
@@ -380,6 +411,25 @@ const Index = () => {
         setSelectedStage(index)
         Taro.setStorageSync('selected_age_stage', index.toString())
 
+        // 更新孩子信息的年龄
+        const stageAgeMap: Record<number, number> = {
+          0: 4,  // 3-5岁，默认4岁
+          1: 6,  // 6-7岁，默认6岁
+          2: 8,  // 8-9岁，默认8岁
+          3: 11  // 10-12岁，默认11岁
+        }
+
+        if (childInfo) {
+          const updatedInfo = {
+            ...childInfo,
+            age: stageAgeMap[index] || 4,
+            stage: index  // 保存年龄段
+          }
+          setChildInfo(updatedInfo)
+          saveChildInfo(updatedInfo)
+          console.log('更新孩子信息年龄:', updatedInfo)
+        }
+
         // 只有在用户已经开始输入问题后，才显示年龄切换消息
         if (chatMessages.length > 0) {
           const stageChangeMessage: ChatMessage = {
@@ -442,13 +492,21 @@ const Index = () => {
         conversationHistory = chatMessages
           .filter(msg => msg.content.trim().length > 0) // 过滤空消息
           .filter(msg => !msg.content.includes('我的耳朵好像出小问题')) // 过滤默认回答
-          .filter(msg => !msg.isCuriosityQuestion) // 过滤继续探索问题
           .filter(msg => !msg.isStageChange) // 过滤年龄段切换消息
           .slice(-12) // 只取最近的 6 轮对话
-          .map(msg => ({
-            role: msg.role,
-            content: msg.content
-          }))
+          .map(msg => {
+            // 如果是继续探索问题，将其作为 assistant 的消息添加
+            if (msg.isCuriosityQuestion && msg.curiosityQuestions && msg.curiosityQuestions.length > 0) {
+              return {
+                role: 'assistant',
+                content: msg.curiosityQuestions.join(' ')
+              }
+            }
+            return {
+              role: msg.role,
+              content: msg.content
+            }
+          })
       }
 
       // 重置标志
@@ -496,43 +554,6 @@ const Index = () => {
     setQuestion(suggestion)
   }
 
-  const handleSetupChild = () => {
-    try {
-      if (!childName.trim() || !childAge.trim()) {
-        Taro.showToast({ title: '请填写完整信息', icon: 'none' })
-        return
-      }
-
-      const age = parseInt(childAge)
-      if (isNaN(age) || age < 3 || age > 12) {
-        Taro.showToast({ title: '请输入3-12岁的年龄', icon: 'none' })
-        return
-      }
-
-      // 保存孩子信息
-      const newChildInfo: ChildInfo = {
-        name: childName.trim(),
-        age: age,
-        createdAt: new Date().toISOString()
-      }
-
-      Taro.setStorageSync('child_info', newChildInfo)
-      setChildInfo(newChildInfo)
-      setShowSetup(false)
-      Taro.showToast({ title: '设置成功', icon: 'success' })
-
-      // 自动选择对应的年龄段
-      const stageIndex = AGE_STAGES.findIndex(s => age >= s.range[0] && age <= s.range[1])
-      if (stageIndex !== -1) {
-        setSelectedStage(stageIndex)
-        Taro.setStorageSync('selected_age_stage', stageIndex.toString())
-      }
-    } catch (error) {
-      console.error('设置孩子信息失败:', error)
-      Taro.showToast({ title: '设置失败', icon: 'none' })
-    }
-  }
-
   // 切换输入模式
   const handleToggleInputMode = () => {
     try {
@@ -544,26 +565,40 @@ const Index = () => {
     }
   }
 
-  // 开始录音（长按触发）
-  const handleStartRecording = async () => {
+  // 切换录音状态（点击触发）
+  const toggleRecord = async () => {
     try {
-      console.log('=== 开始录音 ===', {
-        isRecording: isRecordingRef.current,
-        isCancelingRecording: isCancelingRecordingRef.current
+      console.log('=== 切换录音状态 ===', {
+        isRecording: isRecordingRef.current
       })
 
-      // 如果已经在录音状态，直接返回
-      if (isRecordingRef.current) {
-        console.log('录音已在进行中，忽略')
-        return
-      }
+      if (!isRecordingRef.current) {
+        // 立即更新 UI 状态，显示录音界面
+        setIsRecording(true)
+        isRecordingRef.current = true
 
-      // 检查是否已设置孩子信息
-      if (!childInfo) {
-        Taro.showToast({ title: '请先设置孩子信息', icon: 'none', duration: 2000 })
-        setShowSetup(true)
-        return
+        // 开始录音（异步）
+        await startRecording()
+      } else {
+        // 停止录音并发送
+        await stopRecordingAndSend()
       }
+    } catch (error) {
+      console.error('切换录音状态异常:', error)
+      Taro.showToast({ title: '录音异常，请重试', icon: 'none' })
+      // 发生错误时重置状态
+      setIsRecording(false)
+      isRecordingRef.current = false
+    }
+  }
+
+  // 开始录音
+  const startRecording = async () => {
+    try {
+      console.log('=== 开始录音 ===')
+
+      // 注意：不要在这里检查 isRecordingRef.current，因为调用者已经设置过了
+      // 如果需要防止重复调用，应该在调用者层面处理
 
       console.log('准备检查录音权限...')
 
@@ -610,7 +645,14 @@ const Index = () => {
 
       // 启动计时器
       const timer = setInterval(() => {
-        setRecordingTime(prev => prev + 1)
+        setRecordingTime(prev => {
+          const newTime = prev + 1
+          // 30秒后自动停止
+          if (newTime >= 30) {
+            stopRecordingAndSend()
+          }
+          return newTime
+        })
       }, 1000)
       setRecordingTimer(timer)
 
@@ -641,42 +683,173 @@ const Index = () => {
           frameSize: 50
         })
 
-        // startRecording resolve 后，更新状态
-        setIsRecording(true)
-        isRecordingRef.current = true
+        // 录音启动成功，设置标志
+        recordingStartedRef.current = true
+        console.log('设置 recordingStarted = true')
 
         Taro.vibrateShort({ type: 'medium' })
         console.log('=== 录音已启动 ===')
       } catch (error) {
         console.error('开始录音失败:', error)
 
-        // 清理定时器
+        // 录音启动失败，保持标志为 false
+        recordingStartedRef.current = false
+        console.log('设置 recordingStarted = false')
+
+        // 立即清理定时器
         if (recordingTimer) {
           clearInterval(recordingTimer)
           setRecordingTimer(null)
         }
 
-        // 不更新 isRecording 状态，让用户可以重试
+        // 立即重置状态
+        console.log('立即重置 isRecording = false')
+        setIsRecording(false)
+        isRecordingRef.current = false
+
         Taro.showToast({ title: '开始录音失败，请重试', icon: 'none' })
       }
     } catch (error) {
-      console.error('handleStartRecording 异常:', error)
+      console.error('startRecording 异常:', error)
+
+      // 立即清理定时器
+      const timer = recordingTimer
+      if (timer) {
+        clearInterval(timer)
+        setRecordingTimer(null)
+      }
+
+      // 立即重置状态
+      console.log('异常：立即重置 isRecording = false')
+      setIsRecording(false)
+      isRecordingRef.current = false
+
       Taro.showToast({ title: '录音异常，请重试', icon: 'none' })
+    }
+  }
+
+  // 停止录音并发送（点击交互）
+  const stopRecordingAndSend = async () => {
+    try {
+      console.log('=== 停止录音并发送 ===')
+
+      if (!isRecordingRef.current) {
+        console.log('没有正在进行的录音')
+        return
+      }
+
+      console.log('停止录音')
+
+      if (recordingTimer) {
+        clearInterval(recordingTimer)
+        setRecordingTimer(null)
+      }
+
+      // 设置正在停止标志，防止重复调用
+      isStoppingRecordingRef.current = true
+
+      // 如果是实时模式，处理不同
+      if (voiceService.getMode() === 'doubao-realtime') {
+        console.log('实时模式：发送音频到服务')
+
+        // 先重置UI状态，让用户看到反馈
+        setIsRecording(false)
+        isRecordingRef.current = false
+        recordingStartedRef.current = false
+        setRecordingTime(0)
+        setVolumeHistory([])
+        setCurrentVolume(0)
+
+        // 停止录音获取音频文件路径
+        const result = await voiceService.stopRecording()
+
+        // 重置停止标志
+        isStoppingRecordingRef.current = false
+
+        if (result.success && result.tempFilePath) {
+          // 发送音频到实时服务
+          try {
+            await voiceService.sendAudioToRealtime(result.tempFilePath)
+          } catch (error) {
+            console.error('发送音频失败:', error)
+            Taro.showToast({ title: '发送失败', icon: 'none' })
+          }
+        } else {
+          // 录音失败，显示错误信息
+          Taro.showToast({ title: result.errorMessage || '录音失败，请重试', icon: 'none' })
+        }
+      } else {
+        // 级联模式：停止录音并识别
+        console.log('级联模式：停止录音并识别')
+        Taro.showToast({ title: '正在识别...', icon: 'loading', duration: 2000 })
+
+        const result: ASRResult = await voiceService.stopRecording()
+
+        setIsRecording(false)
+        isRecordingRef.current = false
+        recordingStartedRef.current = false
+        isStoppingRecordingRef.current = false
+        setRecordingTime(0)
+        setVolumeHistory([])
+        setCurrentVolume(0)
+
+        console.log('识别结果:', result)
+
+        if (result.success && result.text) {
+          // 1. 设置识别的文字
+          setQuestion(result.text)
+
+          // 2. 直接提交消息
+          await submitQuestionMessage(result.text)
+
+          // 3. 清空输入框
+          setQuestion('')
+
+          // 4. 切换回语音输入模式
+          setInputMode('voice')
+
+          Taro.showToast({ title: '发送成功', icon: 'success' })
+        } else {
+          Taro.showToast({ title: result.errorMessage || '识别失败，请重试', icon: 'none' })
+        }
+      }
+
+      Taro.vibrateShort({ type: 'light' })
+    } catch (error) {
+      console.error('录音处理失败:', error)
+      setIsRecording(false)
+      isRecordingRef.current = false
+      recordingStartedRef.current = false
+      isStoppingRecordingRef.current = false
+      setRecordingTime(0)
+      setVolumeHistory([])
+      setCurrentVolume(0)
+
+      Taro.showToast({ title: '录音处理失败', icon: 'none' })
     }
   }
 
   // 录音触摸开始
   const handleVoiceTouchStart = (e: any) => {
     try {
-      console.log('=== 触摸开始 ===', e)
+      console.log('=== 触摸开始 ===')
+
       const touch = e.touches[0]
       setTouchStartY(touch.clientY)
       console.log('触摸Y:', touch.clientY)
 
-      // 延迟启动录音，避免重复触发
-      setTimeout(() => {
-        handleStartRecording()
-      }, 100)
+      // 重置所有标志位
+      isStoppingRecordingRef.current = false
+      isCancelingRecordingRef.current = false
+
+      // 立即设置UI状态，确保波形显示
+      console.log('设置 isRecording = true')
+      setIsRecording(true)
+      isRecordingRef.current = true
+      recordingStartedRef.current = false
+
+      // 异步启动录音
+      startRecording()
     } catch (error) {
       console.error('触摸开始失败:', error)
     }
@@ -709,13 +882,18 @@ const Index = () => {
   // 录音触摸结束
   const handleVoiceTouchEnd = async () => {
     try {
-      console.log('=== 触摸结束 ===', {
-        isRecording: isRecordingRef.current,
-        isCancelingRecording: isCancelingRecordingRef.current,
-        mode: voiceService.getMode()
-      })
+      console.log('=== 触摸结束 ===')
 
-      if (!isRecordingRef.current) return
+      if (!isRecordingRef.current) {
+        console.log('没有正在进行的录音，忽略')
+        return
+      }
+
+      // 防止重复调用停止录音
+      if (isStoppingRecordingRef.current) {
+        console.log('正在停止录音中，忽略重复调用')
+        return
+      }
 
       // 如果正在取消录音
       if (isCancelingRecordingRef.current) {
@@ -730,6 +908,8 @@ const Index = () => {
 
         setIsRecording(false)
         isRecordingRef.current = false
+        recordingStartedRef.current = false
+        isStoppingRecordingRef.current = false
         setRecordingTime(0)
         setVolumeHistory([])
         setCurrentVolume(0)
@@ -753,18 +933,26 @@ const Index = () => {
         setRecordingTimer(null)
       }
 
+      // 设置正在停止标志，防止重复调用
+      isStoppingRecordingRef.current = true
+
       // 如果是实时模式，处理不同
       if (voiceService.getMode() === 'doubao-realtime') {
         console.log('实时模式：发送音频到服务')
 
-        // 停止录音获取音频文件路径
-        const result = await voiceService.stopRecording()
-
+        // 先重置UI状态，让用户看到反馈
         setIsRecording(false)
         isRecordingRef.current = false
+        recordingStartedRef.current = false
         setRecordingTime(0)
         setVolumeHistory([])
         setCurrentVolume(0)
+
+        // 停止录音获取音频文件路径
+        const result = await voiceService.stopRecording()
+
+        // 重置停止标志
+        isStoppingRecordingRef.current = false
 
         if (result.success && result.tempFilePath) {
           // 发送音频到实时服务
@@ -781,17 +969,27 @@ const Index = () => {
       } else {
         // 级联模式：停止录音并识别
         console.log('级联模式：停止录音并识别')
-        setRecognitionProgress(true)
-        Taro.showToast({ title: '正在识别...', icon: 'loading', duration: 2000 })
 
-        const result: ASRResult = await voiceService.stopRecording()
-
+        // 先重置UI状态，让用户看到反馈
         setIsRecording(false)
         isRecordingRef.current = false
+        recordingStartedRef.current = false
+        isStoppingRecordingRef.current = true // 保持停止标志，防止重复调用
         setRecordingTime(0)
         setVolumeHistory([])
         setCurrentVolume(0)
-        setRecognitionProgress(false)
+
+        // 清除定时器
+        if (recordingTimer) {
+          clearInterval(recordingTimer)
+          setRecordingTimer(null)
+        }
+
+        // 异步进行语音识别
+        const result: ASRResult = await voiceService.stopRecording()
+
+        // 重置停止标志
+        isStoppingRecordingRef.current = false
 
         console.log('识别结果:', result)
 
@@ -817,10 +1015,11 @@ const Index = () => {
       console.error('录音处理失败:', error)
       setIsRecording(false)
       isRecordingRef.current = false
+      recordingStartedRef.current = false
+      isStoppingRecordingRef.current = false
       setRecordingTime(0)
       setVolumeHistory([])
       setCurrentVolume(0)
-      setRecognitionProgress(false)
 
       Taro.showToast({ title: '录音处理失败', icon: 'none' })
     }
@@ -830,12 +1029,6 @@ const Index = () => {
   const submitQuestionMessage = async (questionText: string) => {
     try {
       console.log('=== 提交问题消息 ===', questionText)
-
-      // 检查是否已设置孩子信息
-      if (!childInfo) {
-        Taro.showToast({ title: '请先设置孩子信息', icon: 'none' })
-        return
-      }
 
       // 检查问题是否为空
       const trimmedQuestion = questionText.trim()
@@ -891,13 +1084,21 @@ const Index = () => {
         conversationHistory = chatMessages
           .filter(msg => msg.content.trim().length > 0) // 过滤空消息
           .filter(msg => !msg.content.includes('我的耳朵好像出小问题')) // 过滤默认回答
-          .filter(msg => !msg.isCuriosityQuestion) // 过滤继续探索问题
           .filter(msg => !msg.isStageChange) // 过滤年龄段切换消息
           .slice(-12) // 只取最近的 6 轮对话
-          .map(msg => ({
-            role: msg.role,
-            content: msg.content
-          }))
+          .map(msg => {
+            // 如果是继续探索问题，将其作为 assistant 的消息添加
+            if (msg.isCuriosityQuestion && msg.curiosityQuestions && msg.curiosityQuestions.length > 0) {
+              return {
+                role: 'assistant',
+                content: msg.curiosityQuestions.join(' ')
+              }
+            }
+            return {
+              role: msg.role,
+              content: msg.content
+            }
+          })
       }
 
       // 重置标志
@@ -949,7 +1150,10 @@ const Index = () => {
       setChatMessages(prev => [...prev, assistantMessage])
 
       // 自动播放语音回答
-      autoPlayVoice(assistantMessage)
+      console.log('准备调用 autoPlayVoice，消息ID:', assistantMessage.id)
+      autoPlayVoice(assistantMessage).catch(error => {
+        console.error('autoPlayVoice 执行失败:', error)
+      })
 
       console.log('=== 消息提交完成 ===')
     } catch (error) {
@@ -972,6 +1176,8 @@ const Index = () => {
       isCancelingRecordingRef.current = false
       setIsRecording(false)
       isRecordingRef.current = false
+      recordingStartedRef.current = false
+      isStoppingRecordingRef.current = false
       setRecordingTime(0)
       setVolumeHistory([])
       setCurrentVolume(0)
@@ -1001,6 +1207,8 @@ const Index = () => {
 
         setIsRecording(false)
         isRecordingRef.current = false
+        recordingStartedRef.current = false
+        isStoppingRecordingRef.current = false
         setRecordingTime(0)
         setVolumeHistory([])
         setCurrentVolume(0)
@@ -1010,17 +1218,17 @@ const Index = () => {
           Taro.showToast({ title: '发送成功', icon: 'success' })
         }
       } else {
-        setRecognitionProgress(true)
         Taro.showToast({ title: '正在识别...', icon: 'loading', duration: 2000 })
 
         const result: ASRResult = await voiceService.stopRecording()
 
         setIsRecording(false)
         isRecordingRef.current = false
+        recordingStartedRef.current = false
+        isStoppingRecordingRef.current = false
         setRecordingTime(0)
         setVolumeHistory([])
         setCurrentVolume(0)
-        setRecognitionProgress(false)
 
         console.log('识别结果:', result)
 
@@ -1036,10 +1244,11 @@ const Index = () => {
       console.error('录音处理失败:', error)
       setIsRecording(false)
       isRecordingRef.current = false
+      recordingStartedRef.current = false
+      isStoppingRecordingRef.current = false
       setRecordingTime(0)
       setVolumeHistory([])
       setCurrentVolume(0)
-      setRecognitionProgress(false)
 
       Taro.showToast({ title: '录音处理失败', icon: 'none' })
     }
@@ -1050,6 +1259,19 @@ const Index = () => {
     const mins = Math.floor(seconds / 60)
     const secs = seconds % 60
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+  }
+
+  // 重置录音状态的辅助函数
+  const resetRecordingState = () => {
+    setIsRecording(false)
+    isRecordingRef.current = false
+    recordingStartedRef.current = false
+    isStoppingRecordingRef.current = false
+    setRecordingTime(0)
+    setVolumeHistory([])
+    setCurrentVolume(0)
+    setIsCancelingRecording(false)
+    isCancelingRecordingRef.current = false
   }
 
   // 播放语音回答
@@ -1085,7 +1307,11 @@ const Index = () => {
   // 自动播放语音回答
   const autoPlayVoice = async (message: ChatMessage) => {
     try {
-      console.log('=== 自动播放语音 ===', message.content)
+      console.log('=== 自动播放语音 ===', {
+        content: message.content,
+        inputMode: inputMode,
+        messageId: message.id
+      })
 
       // 记录当前播放的消息（用于后续播放继续探索问题）
       currentPlayingMessageRef.current = message
@@ -1146,14 +1372,6 @@ const Index = () => {
   }
 
   // 切换文本显示
-  const handleToggleText = (message: ChatMessage) => {
-    setChatMessages(prev =>
-      prev.map(m =>
-        m.id === message.id ? { ...m, showText: !m.showText } : m
-      )
-    )
-  }
-
   const currentStage = AGE_STAGES[selectedStage] || AGE_STAGES[0]
 
   return (
@@ -1210,9 +1428,11 @@ const Index = () => {
 
       {/* 聊天对话区域 */}
       <ScrollView
+        ref={scrollViewRef}
         scrollY
-        className="chat-section"
         scrollTop={scrollTop}
+        className="chat-section"
+        scrollWithAnimation
       >
         {chatMessages.length === 0 ? (
           // 没有对话时显示建议问题
@@ -1235,11 +1455,15 @@ const Index = () => {
           <>
             {chatMessages
               .filter(msg => !msg.isCuriosityQuestion) // 过滤掉「继续探索」问题，不在对话框显示
-              .map((message) => (
-              <View
-                key={message.id}
-                className={`chat-message ${message.role}`}
-              >
+              .map((message, index) => {
+                const filteredMessages = chatMessages.filter(msg => !msg.isCuriosityQuestion)
+                const isLast = index === filteredMessages.length - 1
+                return (
+                  <View
+                    key={message.id}
+                    id={`msg-scroll-${message.id}`}
+                    className={`chat-message ${message.role}`}
+                  >
                 {message.isStageChange ? (
                   // 年龄段切换消息
                   <View className="message-stage-change">
@@ -1257,92 +1481,59 @@ const Index = () => {
                 ) : (
                   // AI回答
                   <View className="message-assistant">
-                    <View className="message-content">
-                      {/* 语音控制按钮 */}
-                      <View className="voice-controls">
-                        <View
-                          className={`voice-play-btn ${message.isPlaying ? 'playing' : ''}`}
-                          onClick={() => handlePlayVoice(message)}
-                        >
-                          <Text className="voice-icon">
-                            {message.isPlaying ? '⏸️' : '🔊'}
-                          </Text>
-                        </View>
+                    <View className="message-content-wrapper">
+                      <View className="message-content">
+                        <Text className="answer-text">{message.content}</Text>
 
-                        {/* 播放进度条（仅播放时显示） */}
-                        {message.isPlaying && (
-                          <View className="play-progress">
-                            <View className="progress-bar">
-                              <View
-                                className="progress-fill"
-                                style={{ width: `${playProgress * 100}%` }}
-                              />
-                            </View>
-                            <Text className="progress-time">
-                              {Math.floor(playProgress * playDuration)}s
-                            </Text>
+                        {/* 简单总结 */}
+                        {message.simpleExplanation && (
+                          <View className="simple-summary">
+                            <Text className="summary-icon">💡</Text>
+                            <Text className="summary-text">{message.simpleExplanation}</Text>
                           </View>
                         )}
 
+                        {/* 继续探索 */}
+                        {message.curiosityQuestions && message.curiosityQuestions.length > 0 && (
+                          <View className="curiosity-section">
+                            <Text className="curiosity-title">继续探索：</Text>
+                            <View className="curiosity-list">
+                              {/* 只显示第一个问题 */}
+                              {message.curiosityQuestions.slice(0, 1).map((q, index) => (
+                                <View
+                                  key={index}
+                                  className="curiosity-item"
+                                  onClick={() => handleSuggestionClick(q)}
+                                >
+                                  <Text className="curiosity-dot">•</Text>
+                                  <Text className="curiosity-text">{q}</Text>
+                                </View>
+                              ))}
+                            </View>
+                          </View>
+                        )}
+
+                        {/* 语音播放按钮 - 在 message-content 内部 */}
                         <View
-                          className="voice-toggle-btn"
-                          onClick={() => handleToggleText(message)}
+                          className={`voice-play-button ${message.isPlaying ? 'playing' : ''}`}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handlePlayVoice(message)
+                          }}
                         >
-                          <Text className="toggle-icon">
-                            {message.showText ? '👁️' : '📝'}
-                          </Text>
-                          <Text className="toggle-text">
-                            {message.showText ? '隐藏文字' : '显示文字'}
-                          </Text>
+                          <View className="voice-wave-icon">
+                            <Text className="speaker-emoji">⏵️</Text>
+                          </View>
                         </View>
                       </View>
-
-                      {/* 文字内容（可隐藏） */}
-                      {message.showText !== false && (
-                        <>
-                          <Text className="answer-text">{message.content}</Text>
-
-                          {/* 简单总结 */}
-                          {message.simpleExplanation && (
-                            <View className="simple-summary">
-                              <Text className="summary-icon">💡</Text>
-                              <Text className="summary-text">{message.simpleExplanation}</Text>
-                            </View>
-                          )}
-
-                          {/* 继续探索 */}
-                          {message.curiosityQuestions && message.curiosityQuestions.length > 0 && (
-                            <View className="curiosity-section">
-                              <Text className="curiosity-title">继续探索：</Text>
-                              <View className="curiosity-list">
-                                {/* 只显示第一个问题 */}
-                                {message.curiosityQuestions.slice(0, 1).map((q, index) => (
-                                  <View
-                                    key={index}
-                                    className="curiosity-item"
-                                    onClick={() => handleSuggestionClick(q)}
-                                  >
-                                    <Text className="curiosity-dot">•</Text>
-                                    <Text className="curiosity-text">{q}</Text>
-                                  </View>
-                                ))}
-                              </View>
-                            </View>
-                          )}
-                        </>
-                      )}
-
-                      {/* 仅显示语音模式时的提示 */}
-                      {message.showText === false && (
-                        <View className="voice-only-hint">
-                          <Text className="hint-text">点击🔊按钮播放语音</Text>
-                        </View>
-                      )}
                     </View>
                   </View>
                 )}
-              </View>
-            ))}
+                </View>
+              )
+            })}
+            {/* 底部占位，防止最后一条消息被输入框遮挡 */}
+            <View style={{ height: '120px' }}></View>
           </>
         )}
       </ScrollView>
@@ -1359,15 +1550,14 @@ const Index = () => {
           <View className="input-area">
             {/* 语音输入模式（默认） */}
             {inputMode === 'voice' ? (
-              <View className="voice-input-wrapper">
+              <View
+                className={`voice-input-wrapper ${isRecording ? 'recording' : ''}`}
+                onTouchStart={handleVoiceTouchStart}
+                onTouchMove={handleVoiceTouchMove}
+                onTouchEnd={handleVoiceTouchEnd}
+              >
                 <View className="voice-input-content">
-                  {recognitionProgress ? (
-                    /* 识别中状态 */
-                    <View className="recognition-progress">
-                      <Text className="recognition-icon">🔄</Text>
-                      <Text className="recognition-text">识别中...</Text>
-                    </View>
-                  ) : isRecording ? (
+                  {isRecording ? (
                     /* 录音中状态 */
                     <View
                       className="recording-status"
@@ -1375,23 +1565,17 @@ const Index = () => {
                       onTouchMove={handleVoiceTouchMove}
                       onTouchEnd={handleVoiceTouchEnd}
                     >
-                      {/* 录音波形动画 - 5条白色竖线 */}
-                      <View className="waveform-container">
-                        {Array.from({ length: 5 }).map((_, i) => (
-                          <View
-                            key={i}
-                            className={`wave-bar ${currentVolume > 0.3 ? 'active' : ''}`}
-                            style={{
-                              height: `${8 + (i % 3) * 8}px`,
-                              animationDelay: `${i * 0.1}s`
-                            }}
-                          />
-                        ))}
-                      </View>
                       <Text className="recording-text">
                         {isCancelingRecording ? '松手取消' : '松开发送'}
                       </Text>
-                      <Text className="recording-time">{formatRecordingTime(recordingTime)}</Text>
+                      {/* 录音波形动画 - 5条白色竖线 */}
+                      <View className="waveform-container-inline">
+                        <View className="wave-bar" style={{ height: '8px', animationDelay: '0s' }}></View>
+                        <View className="wave-bar" style={{ height: '16px', animationDelay: '0.1s' }}></View>
+                        <View className="wave-bar" style={{ height: '12px', animationDelay: '0.2s' }}></View>
+                        <View className="wave-bar" style={{ height: '16px', animationDelay: '0.3s' }}></View>
+                        <View className="wave-bar" style={{ height: '8px', animationDelay: '0.4s' }}></View>
+                      </View>
                     </View>
                   ) : (
                     /* 默认状态：按住说话 */

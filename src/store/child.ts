@@ -9,15 +9,43 @@ const STORAGE_KEYS = {
 }
 
 /**
- * 获取孩子信息
+ * 初始化默认孩子信息
  */
-export function getChildInfo(): ChildInfo | null {
+export function initChildInfo(selectedStage: number = 0): ChildInfo {
+  const stageAgeMap: Record<number, number> = {
+    0: 4,  // 3-5岁，默认4岁
+    1: 6,  // 6-7岁，默认6岁
+    2: 8,  // 8-9岁，默认8岁
+    3: 11  // 10-12岁，默认11岁
+  }
+
+  const defaultInfo: ChildInfo = {
+    name: '小朋友',
+    age: stageAgeMap[selectedStage] || 4,
+    stage: selectedStage,  // 保存年龄段
+    createdAt: new Date().toISOString()
+  }
+
+  saveChildInfo(defaultInfo)
+  console.log('初始化孩子信息:', defaultInfo)
+  return defaultInfo
+}
+
+/**
+ * 获取孩子信息（如果不存在则自动初始化）
+ */
+export function getChildInfo(selectedStage: number = 0): ChildInfo | null {
   try {
     const data = Taro.getStorageSync(STORAGE_KEYS.CHILD_INFO)
-    return data || null
+    if (!data) {
+      // 如果没有孩子信息，自动初始化
+      return initChildInfo(selectedStage)
+    }
+    return data
   } catch (error) {
     console.error('获取孩子信息失败:', error)
-    return null
+    // 出错时也尝试初始化
+    return initChildInfo(selectedStage)
   }
 }
 

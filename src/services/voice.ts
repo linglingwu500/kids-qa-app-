@@ -206,29 +206,39 @@ class VoiceService {
    */
   private initAudioPlayer() {
     try {
+      console.log('=== 初始化音频播放器 ===')
       this.innerAudio = Taro.createInnerAudioContext()
+
+      // 设置音频播放模式
+      this.innerAudio.obeyMuteSwitch = false  // 不遵循静音开关
+      this.innerAudio.autoplay = false  // 不自动播放
+
+      // 监听音频加载事件
+      this.innerAudio.onCanplay(() => {
+        console.log('音频可以播放了，时长:', this.innerAudio.duration, '秒')
+      })
 
       // 监听音频播放事件
       this.innerAudio.onPlay(() => {
-        console.log('开始播放')
+        console.log('=== 开始播放 ===')
         this.updatePlayState({ isPlaying: true })
       })
 
       // 监听音频暂停事件
       this.innerAudio.onPause(() => {
-        console.log('暂停播放')
+        console.log('=== 暂停播放 ===')
         this.updatePlayState({ isPlaying: false })
       })
 
       // 监听音频停止事件
       this.innerAudio.onStop(() => {
-        console.log('停止播放')
+        console.log('=== 停止播放 ===')
         this.updatePlayState({ isPlaying: false, progress: 0, currentMessageId: null })
       })
 
       // 监听音频自然播放结束事件
       this.innerAudio.onEnded(() => {
-        console.log('播放结束')
+        console.log('=== 播放结束 ===')
         this.updatePlayState({ isPlaying: false, progress: 0, currentMessageId: null })
       })
 
@@ -237,6 +247,7 @@ class VoiceService {
         const currentTime = this.innerAudio.currentTime
         const duration = this.innerAudio.duration
         const progress = duration > 0 ? currentTime / duration : 0
+        console.log('播放进度:', currentTime, '/', duration, '秒')
         this.updatePlayState({
           progress,
           duration
@@ -245,9 +256,17 @@ class VoiceService {
 
       // 监听音频播放错误事件
       this.innerAudio.onError((err: any) => {
-        console.error('播放错误:', err)
+        console.error('=== 播放错误 ===', err)
+        console.error('错误详情:', {
+          errMsg: err.errMsg,
+          errorCode: err.errorCode
+        })
         this.updatePlayState({ isPlaying: false })
       })
+
+      console.log('音频播放器初始化完成')
+      console.log('obeyMuteSwitch:', this.innerAudio.obeyMuteSwitch)
+      console.log('autoplay:', this.innerAudio.autoplay)
     } catch (error) {
       console.error('初始化音频播放器失败:', error)
     }
@@ -890,7 +909,7 @@ class VoiceService {
         },
         audio: {
           voice_type: config.voiceType,
-          encoding: 'pcm',  // 使用 pcm 格式（默认值）
+          encoding: 'mp3',  // 改用 mp3 格式，微信小程序支持更好
           speed_ratio: config.speed,
           volume_ratio: 1.0,
           pitch_ratio: config.pitch
@@ -913,29 +932,7 @@ class VoiceService {
             'Content-Type': 'application/json',
             'Authorization': `Bearer;${config.accessKey}`  // 官方文档推荐格式：Bearer;{token}
           },
-          data: {
-            app: {
-              appid: config.appId,
-              token: config.accessKey,
-              cluster: 'volcano_tts'  // 内置音色使用 volcano_tts 集群
-            },
-            user: {
-              uid: 'user_001'  // 用户标识
-            },
-            audio: {
-              voice_type: config.voiceType,
-              encoding: 'pcm',  // 使用 pcm 格式（默认值）
-              speed_ratio: config.speed,
-              volume_ratio: 1.0,
-              pitch_ratio: config.pitch
-            },
-            request: {
-              reqid: requestId,  // 使用 UUID
-              text: text,
-              text_type: 'plain',
-              operation: 'query'  // query 模式：HTTP 非流式合成
-            }
-          },
+          data: requestData,
           success: (res: any) => {
             console.log('豆包 TTS 响应，状态码:', res.statusCode)
             console.log('响应数据:', res.data)
@@ -981,21 +978,20 @@ class VoiceService {
       }
 
       console.log('=== 豆包 TTS 合成完成，收到 base64 数据，长度:', base64Audio.length, '===')
+      console.log('音频数据前100个字符（用于检查）:', base64Audio.substring(0, 100))
 
-      // 将 base64 转换为 ArrayBuffer
-      const audioBuffer = Taro.base64ToArrayBuffer(base64Audio)
-      console.log('音频数据已解码，大小:', audioBuffer.byteLength, '字节')
+      // 直接保存为 MP3 文件（不需要转换）
+      const audioData = base64Audio
+      console.log('音频数据大小:', audioData.length, '字符（base64）')
 
-      // 将 PCM 转换为 WAV 格式（添加 WAV 文件头）
-      const sampleRate = 24000  // TTS API 返回 24000Hz
-      const numChannels = 1     // 单声道
-      const bitsPerSample = 16  // 16-bit
-      const wavBuffer = this.pcmToWav(audioBuffer, sampleRate, numChannels, bitsPerSample)
-      console.log('WAV 格式音频，大小:', wavBuffer.byteLength, '字节')
+      // 估算 MP3 文件大小（base64 解码后约为原来的 3/4）
+      const estimatedSize = Math.floor(audioData.length * 0.75)
+      console.log('预计 MP3 文件大小:', estimatedSize, '字节')
+      console.log('预计音频时长:', Math.ceil(text.length * 0.15), '秒（按每秒约 6-7 字计算）')
 
-      // 生成临时文件路径（使用 .wav 扩展名）
+      // 生成临时文件路径（使用 .mp3 扩展名）
       const timestamp = Date.now()
-      const fileName = `tts_audio_${timestamp}.wav`
+      const fileName = `tts_audio_${timestamp}.mp3`
       const tempDir = `${Taro.env.USER_DATA_PATH}/temp`
       const audioFilePath = `${tempDir}/${fileName}`
 
@@ -1004,14 +1000,33 @@ class VoiceService {
         const fs = Taro.getFileSystemManager()
         try {
           fs.accessSync(tempDir)
+          console.log('临时目录已存在:', tempDir)
         } catch (e) {
           // 目录不存在，创建目录
+          console.log('创建临时目录:', tempDir)
           fs.mkdirSync(tempDir, true)
         }
 
-        // 将 WAV 格式的音频数据写入临时文件
-        fs.writeFileSync(audioFilePath, wavBuffer, 'binary')
+        // 将 MP3 数据写入临时文件（直接使用 base64）
+        console.log('写入音频文件:', audioFilePath)
+        console.log('MP3 数据大小:', audioData.length, '字符（base64）')
+
+        // 使用 writeFileSync 写入 base64 数据，指定 base64 编码
+        fs.writeFileSync(audioFilePath, audioData, 'base64')
         console.log('=== 音频已保存到临时文件:', audioFilePath, '===')
+
+        // 验证文件是否成功写入
+        try {
+          const stat = fs.statSync(audioFilePath)
+          console.log('文件已保存，大小:', stat.size, '字节')
+
+          // 如果文件大小太小，说明有问题
+          if (stat.size < 1000) {
+            console.error('警告：音频文件太小，可能有问题')
+          }
+        } catch (e) {
+          console.error('无法获取文件状态:', e)
+        }
 
         return {
           success: true,
@@ -1118,9 +1133,14 @@ class VoiceService {
    */
   play(audioUrl: string, messageId?: string): void {
     try {
+      console.log('=== voiceService.play ===')
+      console.log('音频路径:', audioUrl)
+      console.log('消息 ID:', messageId)
+
       // 停止并销毁旧的音频实例（如果存在）
       if (this.innerAudio) {
         try {
+          console.log('停止旧音频实例')
           this.innerAudio.stop()
           this.innerAudio.destroy()
         } catch (err) {
@@ -1139,7 +1159,27 @@ class VoiceService {
       }
 
       // 设置音频源
+      console.log('设置音频源:', audioUrl)
       this.innerAudio.src = audioUrl
+
+      // 设置音量（0.0-1.0）
+      this.innerAudio.volume = 1.0
+      console.log('设置播放音量为:', this.innerAudio.volume)
+
+      // 重要：设置不遵循静音开关，确保静音模式下也能播放
+      this.innerAudio.obeyMuteSwitch = false
+      console.log('设置 obeyMuteSwitch 为:', this.innerAudio.obeyMuteSwitch)
+
+      // 监听音频时长（调试用）
+      setTimeout(() => {
+        const duration = this.innerAudio.duration
+        console.log('音频时长:', duration, '秒')
+        console.log('当前音量:', this.innerAudio.volume)
+        console.log('obeyMuteSwitch:', this.innerAudio.obeyMuteSwitch)
+        if (duration === 0 || isNaN(duration)) {
+          console.error('音频时长异常，可能是音频文件损坏')
+        }
+      }, 200)
 
       // 设置当前消息 ID
       this.updatePlayState({
@@ -1147,8 +1187,18 @@ class VoiceService {
         progress: 0
       })
 
-      // 开始播放
-      this.innerAudio.play()
+      // 等待音频加载完成后再播放
+      const playWhenReady = () => {
+        console.log('开始播放音频...')
+        console.log('当前音量:', this.innerAudio.volume)
+        this.innerAudio.play()
+      }
+
+      // 检查是否已经可以播放
+      setTimeout(() => {
+        // 直接尝试播放，InnerAudioContext 会自动处理加载
+        playWhenReady()
+      }, 300)
     } catch (error) {
       console.error('播放失败:', error)
     }
@@ -1280,15 +1330,25 @@ class VoiceService {
    */
   async playText(text: string, messageId?: string): Promise<void> {
     try {
+      console.log('=== voiceService.playText ===')
+      console.log('文本:', text)
+      console.log('消息 ID:', messageId)
+
       // 1. 合成语音
+      console.log('开始合成语音...')
       const result = await this.synthesizeSpeech(text)
+
+      console.log('合成结果:', result)
 
       if (!result.success || !result.audioUrl) {
         console.error('语音合成失败:', result.errorMessage)
         throw new Error(result.errorMessage || '语音合成失败')
       }
 
+      console.log('合成成功，音频路径:', result.audioUrl)
+
       // 2. 播放语音
+      console.log('开始播放语音...')
       this.play(result.audioUrl, messageId)
     } catch (error) {
       console.error('播放文本失败:', error)

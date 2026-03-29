@@ -7,6 +7,14 @@ import { formatRelativeTime } from '../../utils/format'
 import { Question, ChildAnalysis, Recommendation } from '../../types'
 import './index.scss'
 
+// 年龄段映射
+const AGE_STAGE_LABELS = {
+  0: '3-5岁',
+  1: '6-7岁',
+  2: '8-9岁',
+  3: '10-12岁'
+}
+
 const Parent = () => {
   const [childInfo, setChildInfo] = useState(getChildInfo())
   const [questions, setQuestions] = useState<Question[]>([])
@@ -135,7 +143,9 @@ const Parent = () => {
         {childInfo && (
           <View className="child-info">
             <Text className="child-name">{childInfo.name}</Text>
-            <Text className="child-age">{childInfo.age}岁</Text>
+            <Text className="child-age">
+              {childInfo.stage !== undefined ? AGE_STAGE_LABELS[childInfo.stage as keyof typeof AGE_STAGE_LABELS] : `${childInfo.age}岁`}
+            </Text>
           </View>
         )}
         <Text className="header-subtitle">

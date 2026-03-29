@@ -413,7 +413,7 @@
 
 .recommend-header {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: center;
   margin-bottom: 12px;
   flex-wrap: wrap;  // 允许换行
@@ -424,16 +424,16 @@
   font-size: 26px;
   font-weight: bold;
   color: #333;
-  flex: 1;
+  flex: 0 1 auto;  // 可增长、可收缩，但不强制占据所有空间
   min-width: 0;  // 允许文本正确换行
-  word-break: break-all;  // 长书名自动换行
+  word-break: break-word;  // 在单词边界换行
+  overflow-wrap: break-word;  // 长单词换行
 }
 
 .recommend-age-badge {
   background: linear-gradient(135deg, #4a90e2, #6ab0f3);
   padding: 6px 16px;
   border-radius: 12px;
-  margin-left: auto;  // 靠右对齐
   flex-shrink: 0;    // 不缩小
 }
 
