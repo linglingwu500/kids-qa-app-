@@ -973,24 +973,38 @@ const Index = () => {
       }
 
       // ⭐ 立即更新UI状态，让用户松开按钮后马上看到反馈
-      console.log('✅ 立即更新按钮UI状态')
+      console.log('✅✅✅ 立即更新按钮UI状态')
+      console.log('更新前 isRecording:', isRecording)
+
+      // 📌 在预览版/开发者工具中，React setState 可能会延迟
+      // 所以我们先立即设置所有相关状态
       setIsRecording(false)
       setRecordingTime(0)
       setVolumeHistory([])
       setCurrentVolume(0)
 
-      // 震动反馈
-      Taro.vibrateShort({ type: 'light' })
+      // 立即更新内部引用，确保后续逻辑正确
+      isRecordingRef.current = false
+
+      // 震动反馈（立即执行）
+      try {
+        Taro.vibrateShort({ type: 'light' })
+      } catch (e) {
+        // 预览版可能不支持震动，忽略错误
+      }
+      console.log('✅✅✅ 震动反馈已触发')
 
       // ⭐ 异步执行停止录音（不阻塞UI）
-      console.log('✅ 异步执行停止录音')
-      // 不使用 await，让后台处理
-      stopRecordingAndSend().catch(error => {
-        console.error('❌ 停止录音失败:', error)
-        // 出错时重置状态
-        isRecordingRef.current = false
-        setIsSubmitting(false)
-      })
+      console.log('✅✅✅ 异步执行停止录音')
+      // 使用 setTimeout 让 UI 有机会先更新
+      setTimeout(() => {
+        stopRecordingAndSend().catch(error => {
+          console.error('❌ 停止录音失败:', error)
+          // 出错时重置状态
+          setIsSubmitting(false)
+        })
+      }, 10) // 10ms 延迟，让 UI 先渲染
+      console.log('✅✅✅ stopRecordingAndSend 已调用（延迟10ms后执行）')
 
     } catch (error) {
       console.error('❌ 触摸结束处理失败:', error)
