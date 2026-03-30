@@ -113,6 +113,9 @@ const Index = () => {
   // ScrollView ref，用于滚动控制
   const scrollViewRef = React.useRef<any>(null)
 
+  // 语音输入区域 ref，用于直接操作 DOM
+  const voiceInputWrapperRef = React.useRef<any>(null)
+
   console.log('=== Index 组件 ===')
 
   // 获取系统信息（状态栏高度）
@@ -1021,6 +1024,20 @@ const Index = () => {
         return
       }
 
+      // ⭐ 直接操作 DOM，立即移除 recording class
+      console.log('✅✅✅ 直接操作 DOM 移除 recording class')
+      if (voiceInputWrapperRef.current) {
+        try {
+          // 使用 Taro 的 API 直接操作 DOM class
+          const element = voiceInputWrapperRef.current
+          // 移除 recording class
+          element.className = element.className.replace(/\srecording\s*/, ' ').trim()
+          console.log('✅✅✅ DOM class 已更新')
+        } catch (e) {
+          console.error('直接操作 DOM 失败:', e)
+        }
+      }
+
       // ⭐ 立即设置识别中状态，给用户即时反馈
       console.log('✅✅✅ 立即设置识别中状态')
       setIsSubmitting(true)
@@ -1676,6 +1693,7 @@ const Index = () => {
             {/* 语音输入模式（默认） */}
             {inputMode === 'voice' ? (
               <View
+                ref={voiceInputWrapperRef}
                 className={`voice-input-wrapper ${isRecording ? 'recording' : ''}`}
                 onTouchStart={handleVoiceTouchStart}
                 onTouchMove={handleVoiceTouchMove}
