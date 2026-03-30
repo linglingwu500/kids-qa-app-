@@ -73,6 +73,7 @@ const Index = () => {
   // 语音相关状态
   const [inputMode, setInputMode] = useState<'text' | 'voice'>('voice')
   const [isRecording, setIsRecording] = useState(false)
+  const [showRecordingUI, setShowRecordingUI] = useState(false) // UI显示状态，立即响应用户操作
   const [recordingTime, setRecordingTime] = useState(0)
   const [recordingTimer, setRecordingTimer] = useState<NodeJS.Timeout | null>(null) // 保留state用于调试显示
   const [currentVolume, setCurrentVolume] = useState(0) // 当前音量（0-1）
@@ -586,6 +587,7 @@ const Index = () => {
 
       if (!isRecordingRef.current) {
         // 立即更新 UI 状态，显示录音界面
+        setShowRecordingUI(true) // 立即显示UI
         setIsRecording(true)
         isRecordingRef.current = true
 
@@ -599,6 +601,7 @@ const Index = () => {
       console.error('切换录音状态异常:', error)
       Taro.showToast({ title: '录音异常，请重试', icon: 'none' })
       // 发生错误时重置状态
+      setShowRecordingUI(false)
       setIsRecording(false)
       isRecordingRef.current = false
     }
@@ -812,6 +815,7 @@ const Index = () => {
 
       // 立即重置状态
       console.log('异常：立即重置 isRecording = false')
+      setShowRecordingUI(false)
       setIsRecording(false)
       isRecordingRef.current = false
 
@@ -921,6 +925,7 @@ const Index = () => {
       Taro.vibrateShort({ type: 'light' })
     } catch (error) {
       console.error('录音处理失败:', error)
+      setShowRecordingUI(false)
       setIsRecording(false)
       isRecordingRef.current = false
       recordingStartedRef.current = false
@@ -948,7 +953,8 @@ const Index = () => {
       isCancelingRecordingRef.current = false
 
       // 立即设置UI状态，确保波形显示
-      console.log('设置 isRecording = true')
+      console.log('设置 isRecording = true, showRecordingUI = true')
+      setShowRecordingUI(true) // 立即显示UI
       setIsRecording(true)
       isRecordingRef.current = true
       recordingStartedRef.current = false
@@ -1024,7 +1030,11 @@ const Index = () => {
         return
       }
 
-      // ⭐ 立即更新UI状态，让用户松开按钮后马上看到反馈
+      // ⭐ 立即隐藏录音UI，给用户即时反馈
+      console.log('✅✅✅ 立即隐藏录音UI')
+      setShowRecordingUI(false)
+
+      // ⭐ 立即更新UI状态
       console.log('✅✅✅ 立即更新UI状态')
       setIsRecording(false)
       setRecordingTime(0)
@@ -1052,6 +1062,7 @@ const Index = () => {
     } catch (error) {
       console.error('❌ 触摸结束处理失败:', error)
       // 出错时重置UI状态
+      setShowRecordingUI(false)
       setIsRecording(false)
       isRecordingRef.current = false
       recordingStartedRef.current = false
@@ -1094,6 +1105,7 @@ const Index = () => {
 
       // 取消录音，不发送
       console.log('✅ 系统中断，取消录音')
+      setShowRecordingUI(false)
       setIsRecording(false)
       isRecordingRef.current = false
       recordingStartedRef.current = false
@@ -1289,6 +1301,7 @@ const Index = () => {
 
       setIsCancelingRecording(false)
       isCancelingRecordingRef.current = false
+      setShowRecordingUI(false)
       setIsRecording(false)
       isRecordingRef.current = false
       recordingStartedRef.current = false
@@ -1363,6 +1376,7 @@ const Index = () => {
       }
     } catch (error) {
       console.error('录音处理失败:', error)
+      setShowRecordingUI(false)
       setIsRecording(false)
       isRecordingRef.current = false
       recordingStartedRef.current = false
@@ -1678,14 +1692,14 @@ const Index = () => {
             {inputMode === 'voice' ? (
               <View
                 ref={voiceInputWrapperRef}
-                className={`voice-input-wrapper ${isRecording ? 'recording' : ''}`}
+                className={`voice-input-wrapper ${showRecordingUI ? 'recording' : ''}`}
                 onTouchStart={handleVoiceTouchStart}
                 onTouchMove={handleVoiceTouchMove}
                 onTouchEnd={handleVoiceTouchEnd}
                 onTouchCancel={handleVoiceTouchCancel}
               >
                 <View className="voice-input-content">
-                  {isRecording ? (
+                  {showRecordingUI ? (
                     /* 录音中状态 */
                     <View className="recording-status">
                       <Text className="recording-text">
