@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, unstable_flushSync as flushSync } from 'react'
 import { View, Text, Textarea, Button, ScrollView, Canvas, Image } from '@tarojs/components'
 import Taro, { useRouter } from '@tarojs/taro'
-import { flushSync } from 'react-dom'
 import { getChildInfo, saveChildInfo, saveQuestion, updateQuestionWithAnswer } from '../../store/child'
 import { generateChildFriendlyAnswer } from '../../services/ai'
 import { formatRelativeTime } from '../../utils/format'
