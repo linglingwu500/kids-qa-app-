@@ -823,7 +823,8 @@
   border-radius: 24px;
   overflow: hidden;
   height: 88px;
-  transition: all 0.2s ease;
+  /* 移除 transition 以确保 UI 立即响应 */
+  /* transition: all 0.2s ease; */
 }
 
 .voice-input-wrapper.recording {
