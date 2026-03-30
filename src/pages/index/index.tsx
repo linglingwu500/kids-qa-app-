@@ -1024,25 +1024,8 @@ const Index = () => {
         return
       }
 
-      // ⭐ 直接操作 DOM，立即移除 recording class
-      console.log('✅✅✅ 直接操作 DOM 移除 recording class')
-      if (voiceInputWrapperRef.current) {
-        try {
-          // 使用 Taro 的 API 直接操作 DOM class
-          const element = voiceInputWrapperRef.current
-          // 移除 recording class
-          element.className = element.className.replace(/\srecording\s*/, ' ').trim()
-          console.log('✅✅✅ DOM class 已更新')
-        } catch (e) {
-          console.error('直接操作 DOM 失败:', e)
-        }
-      }
-
-      // ⭐ 立即设置识别中状态，给用户即时反馈
-      console.log('✅✅✅ 立即设置识别中状态')
-      setIsSubmitting(true)
-
-      // 立即更新UI状态，让用户松开按钮后马上看到反馈
+      // ⭐ 立即更新UI状态，让用户松开按钮后马上看到反馈
+      console.log('✅✅✅ 立即更新UI状态')
       setIsRecording(false)
       setRecordingTime(0)
       setVolumeHistory([])
@@ -1055,15 +1038,16 @@ const Index = () => {
         // 预览版可能不支持震动，忽略错误
       }
 
-      // ⭐ 直接同步执行停止录音逻辑
-      console.log('✅✅✅ 同步执行 stopRecordingAndSend')
-      try {
-        await stopRecordingAndSend()
-      } catch (error) {
-        console.error('❌ 停止录音失败:', error)
-        // 出错时重置状态
-        setIsSubmitting(false)
-      }
+      // ⭐ 使用 Taro.nextTick 确保 UI 更新后再执行停止录音
+      console.log('✅✅✅ 使用 nextTick 后执行 stopRecordingAndSend')
+      Taro.nextTick(() => {
+        console.log('✅✅✅ nextTick 回调执行，调用 stopRecordingAndSend')
+        stopRecordingAndSend().catch(error => {
+          console.error('❌ 停止录音失败:', error)
+          // 出错时重置状态
+          setIsSubmitting(false)
+        })
+      })
 
     } catch (error) {
       console.error('❌ 触摸结束处理失败:', error)
