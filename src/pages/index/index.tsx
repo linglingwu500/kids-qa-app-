@@ -1695,20 +1695,8 @@ const Index = () => {
                         <View className="wave-bar" style={{ height: '8px', animationDelay: '0.4s' }}></View>
                       </View>
                     </View>
-                  ) : isSubmitting ? (
-                    /* 识别中状态 */
-                    <View className="voice-prompt recognizing">
-                      <View className="recognizing-indicator">
-                        <View className="recognizing-dots">
-                          <View className="recognizing-dot dot-1"></View>
-                          <View className="recognizing-dot dot-2"></View>
-                          <View className="recognizing-dot dot-3"></View>
-                        </View>
-                      </View>
-                      <Text className="voice-prompt-text">语音识别中</Text>
-                    </View>
                   ) : (
-                    /* 默认状态：按住说话 */
+                    /* 默认状态：按住说话（忽略 isSubmitting，确保松开按钮立即恢复）*/
                     <View className="voice-prompt">
                       <Image className="voice-prompt-icon-image" src={micIcon} />
                       <Text className="voice-prompt-text">按住说话</Text>
