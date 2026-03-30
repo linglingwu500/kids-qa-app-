@@ -10,10 +10,10 @@ const VOICE_CONFIG = {
   record: {
     duration: 30000,      // 最长录音时长（毫秒）
     format: 'mp3',        // 音频格式：mp3（微信小程序实际输出格式）
-    sampleRate: 16000,    // 采样率
+    sampleRate: 16000,    // 采样率（部分设备可能不支持，将使用默认值）
     numberOfChannels: 1,   // 声道数
-    encodeBitRate: 48000, // 编码码率
-    frameSize: 50         // 指定帧大小
+    encodeBitRate: 48000, // 编码码率（部分设备可能不支持，将使用默认值）
+    // frameSize 已移除，部分设备不支持此参数
   },
   // GLM-ASR 配置（备用）
   glmAsr: {
@@ -138,13 +138,17 @@ class VoiceService {
 
       // 获取录音管理器实例
       this.recorderManager = Taro.getRecorderManager()
+      console.log('录音管理器创建成功')
 
       // 监听录音开始
       this.recorderManager.onStart(() => {
-        console.log('录音开始事件')
+        console.log('✅ 录音开始事件触发')
         if (this.startResolve) {
           this.startResolve()
           this.startResolve = null
+          this.startReject = null
+        } else {
+          console.warn('startResolve 为空，无法处理 onStart 事件')
         }
       })
 
@@ -155,10 +159,12 @@ class VoiceService {
 
       // 监听录音停止
       this.recorderManager.onStop((res: any) => {
-        console.log('录音停止事件:', res)
+        console.log('✅ 录音停止事件:', res)
         if (this.stopResolve) {
           this.stopResolve(res)
           this.stopResolve = null
+        } else {
+          console.warn('stopResolve 为空，无法处理 onStop 事件')
         }
         if (this.cancelResolve) {
           this.cancelResolve()
@@ -168,10 +174,41 @@ class VoiceService {
 
       // 监听录音错误
       this.recorderManager.onError((err: any) => {
-        console.error('录音错误事件:', err)
+        console.error('❌ 录音错误事件触发:', err)
+        console.error('错误详情:', {
+          errMsg: err?.errMsg,
+          errorCode: err?.errorCode,
+          extra: err
+        })
+
+        // 如果是 "recorder not start" 错误，且 onStart 可能稍后触发
+        // 延迟 200ms 再处理，给 onStart 一个机会
+        if (err?.errMsg && err.errMsg.includes('recorder not start') && this.startResolve) {
+          console.log('⚠️ 检测到 "recorder not start" 错误，延迟 200ms 处理...')
+          setTimeout(() => {
+            // 如果 200ms 后 onStart 还没触发，才算真正失败
+            if (this.startResolve) {
+              console.log('⏰ 延迟结束，onStart 未触发，确认录音启动失败')
+              const error = new Error(err?.errMsg || '录音失败')
+              ;(error as any).code = err?.errorCode
+              ;(error as any).original = err
+              this.startReject(error)
+              this.startReject = null
+              this.startResolve = null
+            } else {
+              console.log('✅ onStart 在延迟期间触发了，忽略错误')
+            }
+          }, 200)
+          return
+        }
+
         if (this.startReject) {
-          this.startReject(err)
+          const error = new Error(err?.errMsg || '录音失败')
+          ;(error as any).code = err?.errorCode
+          ;(error as any).original = err
+          this.startReject(error)
           this.startReject = null
+          this.startResolve = null
         }
         // 录音错误时，stopResolve 传入一个包含错误信息的对象
         if (this.stopResolve) {
@@ -195,10 +232,25 @@ class VoiceService {
       }
 
       this.recorderInitialized = true
-      console.log('录音管理器初始化完成')
+      console.log('✅ 录音管理器初始化完成')
     } catch (error) {
-      console.error('初始化录音管理器失败:', error)
+      console.error('❌ 初始化录音管理器失败:', error)
+      this.recorderInitialized = false
     }
+  }
+
+  /**
+   * 重置录音管理器（用于出错后恢复）
+   */
+  resetRecorderManager() {
+    console.log('=== 重置录音管理器 ===')
+    this.recorderInitialized = false
+    this.recorderManager = null
+    this.startResolve = null
+    this.startReject = null
+    this.stopResolve = null
+    this.cancelResolve = null
+    this.initRecorderManager()
   }
 
   /**
@@ -306,6 +358,20 @@ class VoiceService {
       try {
         console.log('=== voiceService.startRecording ===')
 
+        // 检查录音管理器是否已初始化
+        if (!this.recorderManager) {
+          console.error('录音管理器未初始化')
+          reject(new Error('录音管理器未初始化'))
+          return
+        }
+
+        // 检查是否已经在启动中（防止并发）
+        if (this.startResolve) {
+          console.warn('⚠️ 录音正在启动中，忽略重复请求')
+          reject(new Error('录音正在启动中'))
+          return
+        }
+
         // 清除之前的 resolve/reject
         this.startResolve = null
         this.startReject = null
@@ -320,12 +386,37 @@ class VoiceService {
         const config = { ...VOICE_CONFIG.record, ...options }
         console.log('录音配置:', config)
 
-        // 直接调用 start，让录音管理器自己管理状态
+        // 尝试启动录音
         console.log('调用 recorderManager.start()')
-        this.recorderManager.start(config)
+        try {
+          const result = this.recorderManager.start(config)
+          console.log('✅ recorderManager.start() 调用成功, 返回值:', result)
+
+          // 某些设备上，start()调用成功但onStart事件可能不触发或延迟
+          // 添加一个备用机制：如果start()返回成功，就认为录音已开始
+          // 延迟1000ms后，如果onStart还没触发，就直接resolve
+          setTimeout(() => {
+            if (this.startResolve) {
+              console.log('⚠️ onStart事件未触发，但start()调用成功，假设录音已启动')
+              this.startResolve()
+              // 注意：不要清理 startReject，因为后续可能还有错误事件
+              this.startResolve = null
+            }
+          }, 1000)
+        } catch (startError) {
+          console.error('❌ recorderManager.start() 调用失败:', startError)
+          console.error('错误详情:', startError)
+          reject(startError)
+          // 清理 resolve/reject
+          this.startResolve = null
+          this.startReject = null
+        }
       } catch (error) {
         console.error('startRecording 异常:', error)
         reject(error)
+        // 清理 resolve/reject
+        this.startResolve = null
+        this.startReject = null
       }
     })
   }

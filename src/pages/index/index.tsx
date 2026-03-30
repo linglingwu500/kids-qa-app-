@@ -50,6 +50,7 @@ interface ChatMessage {
   showText?: boolean
   isCuriosityQuestion?: boolean // 标记是否为「继续探索」问题
   isStageChange?: boolean // 标记是否为年龄段切换消息
+  isLoading?: boolean // 是否是加载中的消息
 }
 
 const Index = () => {
@@ -73,7 +74,7 @@ const Index = () => {
   const [inputMode, setInputMode] = useState<'text' | 'voice'>('voice')
   const [isRecording, setIsRecording] = useState(false)
   const [recordingTime, setRecordingTime] = useState(0)
-  const [recordingTimer, setRecordingTimer] = useState<NodeJS.Timeout | null>(null)
+  const [recordingTimer, setRecordingTimer] = useState<NodeJS.Timeout | null>(null) // 保留state用于调试显示
   const [currentVolume, setCurrentVolume] = useState(0) // 当前音量（0-1）
   const [volumeHistory, setVolumeHistory] = useState<number[]>([]) // 音量历史，用于波形显示
   const [isCancelingRecording, setIsCancelingRecording] = useState(false) // 是否正在上滑取消录音
@@ -84,6 +85,13 @@ const Index = () => {
   const isCancelingRecordingRef = React.useRef(false)
   const recordingStartedRef = React.useRef(false) // 跟踪录音是否真的启动成功了
   const isStoppingRecordingRef = React.useRef(false) // 防止重复停止录音
+  const handleVoiceTouchEndCalledRef = React.useRef(false) // 防止重复调用 handleVoiceTouchEnd
+  const handleVoiceTouchEndTimestampRef = React.useRef(0) // 记录上次调用的时间戳
+  const stopRecordingAndSendTimestampRef = React.useRef(0) // 记录 stopRecordingAndSend 上次调用的时间戳
+
+  // 定时器引用（使用 ref 确保在异步函数中能访问到最新值）
+  const recordingTimerRef = React.useRef<NodeJS.Timeout | null>(null)
+  const volumeTimerRef = React.useRef<NodeJS.Timeout | null>(null)
 
   // 跟踪当前播放的消息（用于在播放结束时触发继续探索问题）
   const currentPlayingMessageRef = React.useRef<ChatMessage | null>(null)
@@ -194,7 +202,8 @@ const Index = () => {
         scrollToBottom()
       }, 200)
     }
-  }, [chatMessages.length, scrollToBottom])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatMessages.length])
   // ========== 自动滚动功能结束 ==========
 
   // 监听语音播放状态变化
@@ -609,8 +618,26 @@ const Index = () => {
       if (!setting.authSetting['scope.record']) {
         console.log('首次请求录音权限')
         try {
+          // 请求权限
           await Taro.authorize({ scope: 'scope.record' })
           console.log('录音权限授权成功')
+
+          // 权限授权成功后，不立即启动录音
+          // 因为用户必须松手去点击"允许"，现在已经松手了
+          // 显示提示，让用户重新按住按钮
+          Taro.showToast({
+            title: '请重新按住按钮开始录音',
+            icon: 'none',
+            duration: 2000
+          })
+
+          // 重置状态，让用户可以重新按住
+          setIsRecording(false)
+          isRecordingRef.current = false
+          recordingStartedRef.current = false
+
+          console.log('权限已授权，重置状态等待用户重新按住')
+          return
         } catch (error) {
           console.error('录音权限授权失败:', error)
           Taro.showModal({
@@ -618,6 +645,10 @@ const Index = () => {
             content: '为了使用语音输入功能，请授权麦克风权限',
             showCancel: false
           })
+          // 重置状态
+          setIsRecording(false)
+          isRecordingRef.current = false
+          recordingStartedRef.current = false
           return
         }
       } else if (setting.authSetting['scope.record'] === false) {
@@ -654,7 +685,8 @@ const Index = () => {
           return newTime
         })
       }, 1000)
-      setRecordingTimer(timer)
+      recordingTimerRef.current = timer
+      setRecordingTimer(timer) // 保留state用于调试
 
       // 启动音量采样定时器（用于波形显示）
       const volumeTimer = setInterval(() => {
@@ -666,6 +698,7 @@ const Index = () => {
           return newHistory.slice(-50)
         })
       }, 100)
+      volumeTimerRef.current = volumeTimer
 
       // 开始录音（等待 onStart 事件才更新 isRecording）
       console.log('调用 voiceService.startRecording...')
@@ -674,14 +707,34 @@ const Index = () => {
         // 实时模式需要使用 WAV 格式
         const format = voiceService.getMode() === 'doubao-realtime' ? 'wav' : 'mp3'
 
-        await voiceService.startRecording({
+        console.log('录音配置:', {
           duration: 60000,
           format: format,
           sampleRate: 16000,
-          numberOfChannels: 1,
-          encodeBitRate: 48000,
-          frameSize: 50
+          numberOfChannels: 1
         })
+
+        // 添加超时保护，延长到10秒
+        const startTime = Date.now()
+        const timeout = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('录音启动超时（10秒）')), 10000)
+        )
+
+        console.log('开始等待录音启动...')
+
+        // 等待录音启动或超时
+        await Promise.race([
+          voiceService.startRecording({
+            duration: 60000,
+            format: format,
+            sampleRate: 16000,
+            numberOfChannels: 1
+          }),
+          timeout
+        ])
+
+        const elapsed = Date.now() - startTime
+        console.log(`✅ 录音启动成功，耗时 ${elapsed}ms`)
 
         // 录音启动成功，设置标志
         recordingStartedRef.current = true
@@ -690,16 +743,22 @@ const Index = () => {
         Taro.vibrateShort({ type: 'medium' })
         console.log('=== 录音已启动 ===')
       } catch (error) {
-        console.error('开始录音失败:', error)
+        console.error('❌ 开始录音失败:', error)
+        console.error('错误详情:', error?.message || error)
 
         // 录音启动失败，保持标志为 false
         recordingStartedRef.current = false
         console.log('设置 recordingStarted = false')
 
         // 立即清理定时器
-        if (recordingTimer) {
-          clearInterval(recordingTimer)
+        if (recordingTimerRef.current) {
+          clearInterval(recordingTimerRef.current)
+          recordingTimerRef.current = null
           setRecordingTimer(null)
+        }
+        if (volumeTimerRef.current) {
+          clearInterval(volumeTimerRef.current)
+          volumeTimerRef.current = null
         }
 
         // 立即重置状态
@@ -707,7 +766,19 @@ const Index = () => {
         setIsRecording(false)
         isRecordingRef.current = false
 
-        Taro.showToast({ title: '开始录音失败，请重试', icon: 'none' })
+        // 根据错误类型显示不同提示
+        let errorMessage = '开始录音失败，请重试'
+        if (error?.message) {
+          if (error.message.includes('权限') || error.message.includes('authorize')) {
+            errorMessage = '需要录音权限'
+          } else if (error.message.includes('超时')) {
+            errorMessage = '录音启动超时，请重试'
+          } else if (error.message.includes('format')) {
+            errorMessage = '录音格式不支持'
+          }
+        }
+
+        Taro.showToast({ title: errorMessage, icon: 'none' })
       }
     } catch (error) {
       console.error('startRecording 异常:', error)
@@ -730,6 +801,17 @@ const Index = () => {
 
   // 停止录音并发送（点击交互）
   const stopRecordingAndSend = async () => {
+    const now = Date.now()
+    const timeSinceLastCall = now - stopRecordingAndSendTimestampRef.current
+
+    // 时间戳检查：如果距离上次调用不到1秒，忽略
+    if (timeSinceLastCall < 1000) {
+      console.log(`❌ stopRecordingAndSend 正在处理中，忽略重复调用 (距离上次调用 ${timeSinceLastCall}ms)`)
+      return
+    }
+    stopRecordingAndSendTimestampRef.current = now
+    console.log('✅ stopRecordingAndSend 设置时间戳:', now)
+
     try {
       console.log('=== 停止录音并发送 ===')
 
@@ -740,31 +822,45 @@ const Index = () => {
 
       console.log('停止录音')
 
-      if (recordingTimer) {
-        clearInterval(recordingTimer)
+      // ⭐ 立即更新UI状态（无论从哪里调用，都要立即更新UI）
+      console.log('✅ 立即更新UI状态')
+      setIsRecording(false)
+      setRecordingTime(0)
+      setVolumeHistory([])
+      setCurrentVolume(0)
+
+      // 清理定时器（使用 ref 确保能访问到最新的定时器）
+      if (recordingTimerRef.current) {
+        console.log('✅ 清理录音计时器')
+        clearInterval(recordingTimerRef.current)
+        recordingTimerRef.current = null
         setRecordingTimer(null)
+      }
+
+      // 清理音量采样定时器
+      if (volumeTimerRef.current) {
+        console.log('✅ 清理音量采样定时器')
+        clearInterval(volumeTimerRef.current)
+        volumeTimerRef.current = null
       }
 
       // 设置正在停止标志，防止重复调用
       isStoppingRecordingRef.current = true
 
+      // ⭐ 更新内部逻辑状态
+      console.log('✅ 更新内部逻辑状态')
+      isRecordingRef.current = false
+
+      // ⭐ 设置识别中状态（显示"语音识别中"）
+      console.log('✅ 设置识别中状态')
+      setIsSubmitting(true)
+
       // 如果是实时模式，处理不同
       if (voiceService.getMode() === 'doubao-realtime') {
         console.log('实时模式：发送音频到服务')
 
-        // 先重置UI状态，让用户看到反馈
-        setIsRecording(false)
-        isRecordingRef.current = false
-        recordingStartedRef.current = false
-        setRecordingTime(0)
-        setVolumeHistory([])
-        setCurrentVolume(0)
-
         // 停止录音获取音频文件路径
         const result = await voiceService.stopRecording()
-
-        // 重置停止标志
-        isStoppingRecordingRef.current = false
 
         if (result.success && result.tempFilePath) {
           // 发送音频到实时服务
@@ -772,26 +868,20 @@ const Index = () => {
             await voiceService.sendAudioToRealtime(result.tempFilePath)
           } catch (error) {
             console.error('发送音频失败:', error)
+            setIsSubmitting(false)  // ⭐ 重置识别中状态
             Taro.showToast({ title: '发送失败', icon: 'none' })
           }
         } else {
           // 录音失败，显示错误信息
+          setIsSubmitting(false)  // ⭐ 重置识别中状态
           Taro.showToast({ title: result.errorMessage || '录音失败，请重试', icon: 'none' })
         }
       } else {
         // 级联模式：停止录音并识别
         console.log('级联模式：停止录音并识别')
-        Taro.showToast({ title: '正在识别...', icon: 'loading', duration: 2000 })
 
+        // 停止录音并识别
         const result: ASRResult = await voiceService.stopRecording()
-
-        setIsRecording(false)
-        isRecordingRef.current = false
-        recordingStartedRef.current = false
-        isStoppingRecordingRef.current = false
-        setRecordingTime(0)
-        setVolumeHistory([])
-        setCurrentVolume(0)
 
         console.log('识别结果:', result)
 
@@ -808,8 +898,9 @@ const Index = () => {
           // 4. 切换回语音输入模式
           setInputMode('voice')
 
-          Taro.showToast({ title: '发送成功', icon: 'success' })
+          // ✅ 不显示"发送成功"toast
         } else {
+          setIsSubmitting(false)  // ⭐ 重置识别中状态
           Taro.showToast({ title: result.errorMessage || '识别失败，请重试', icon: 'none' })
         }
       }
@@ -824,6 +915,7 @@ const Index = () => {
       setRecordingTime(0)
       setVolumeHistory([])
       setCurrentVolume(0)
+      setIsSubmitting(false)  // ⭐ 重置识别中状态
 
       Taro.showToast({ title: '录音处理失败', icon: 'none' })
     }
@@ -880,148 +972,115 @@ const Index = () => {
   }
 
   // 录音触摸结束
-  const handleVoiceTouchEnd = async () => {
+  const handleVoiceTouchEnd = async (e?: any) => {
+    const now = Date.now()
+    const timeSinceLastCall = now - handleVoiceTouchEndTimestampRef.current
+
+    // 使用时间戳和布尔标志双重检查，防止重复调用
+    if (handleVoiceTouchEndCalledRef.current && timeSinceLastCall < 1000) {
+      console.log(`❌ 触摸结束正在处理中，忽略重复调用 (距离上次调用 ${timeSinceLastCall}ms)`)
+      return
+    }
+    handleVoiceTouchEndCalledRef.current = true
+    handleVoiceTouchEndTimestampRef.current = now
+
+    console.log('✅ 设置防重复标志，时间戳:', now)
+
+    // 设置一个定时器，在较长时间后重置标志（允许下次调用）
+    setTimeout(() => {
+      console.log('⏰ 重置防重复标志')
+      handleVoiceTouchEndCalledRef.current = false
+    }, 1000) // 增加到 1000ms 冷却时间
+
     try {
       console.log('=== 触摸结束 ===')
+      console.log('当前状态 - isRecordingRef:', isRecordingRef.current)
+      console.log('当前状态 - isStoppingRecordingRef:', isStoppingRecordingRef.current)
+      console.log('当前状态 - isCancelingRecordingRef:', isCancelingRecordingRef.current)
 
+      // 检查是否在录音中
       if (!isRecordingRef.current) {
-        console.log('没有正在进行的录音，忽略')
+        console.log('❌ 没有正在进行的录音，忽略')
         return
       }
 
-      // 防止重复调用停止录音
-      if (isStoppingRecordingRef.current) {
-        console.log('正在停止录音中，忽略重复调用')
-        return
-      }
-
-      // 如果正在取消录音
+      // 检查是否在取消状态
       if (isCancelingRecordingRef.current) {
-        console.log('取消录音')
-        setIsCancelingRecording(false)
-        isCancelingRecordingRef.current = false
-
-        if (recordingTimer) {
-          clearInterval(recordingTimer)
-          setRecordingTimer(null)
-        }
-
-        setIsRecording(false)
-        isRecordingRef.current = false
-        recordingStartedRef.current = false
-        isStoppingRecordingRef.current = false
-        setRecordingTime(0)
-        setVolumeHistory([])
-        setCurrentVolume(0)
-
-        // 取消录音
-        try {
-          await voiceService.cancelRecording()
-        } catch (error) {
-          console.error('取消录音失败:', error)
-        }
-
-        Taro.showToast({ title: '已取消录音', icon: 'none' })
+        console.log('⚠️ 检测到上滑取消，执行取消操作')
+        handleCancelRecording()
         return
       }
 
-      // 停止录音
-      console.log('停止录音')
+      // 异步执行停止录音（会更新UI状态）
+      console.log('✅ 异步执行停止录音')
+      await stopRecordingAndSend()
 
-      if (recordingTimer) {
-        clearInterval(recordingTimer)
-        setRecordingTimer(null)
-      }
+      // 震动反馈
+      Taro.vibrateShort({ type: 'light' })
 
-      // 设置正在停止标志，防止重复调用
-      isStoppingRecordingRef.current = true
-
-      // 如果是实时模式，处理不同
-      if (voiceService.getMode() === 'doubao-realtime') {
-        console.log('实时模式：发送音频到服务')
-
-        // 先重置UI状态，让用户看到反馈
-        setIsRecording(false)
-        isRecordingRef.current = false
-        recordingStartedRef.current = false
-        setRecordingTime(0)
-        setVolumeHistory([])
-        setCurrentVolume(0)
-
-        // 停止录音获取音频文件路径
-        const result = await voiceService.stopRecording()
-
-        // 重置停止标志
-        isStoppingRecordingRef.current = false
-
-        if (result.success && result.tempFilePath) {
-          // 发送音频到实时服务
-          try {
-            await voiceService.sendAudioToRealtime(result.tempFilePath)
-          } catch (error) {
-            console.error('发送音频失败:', error)
-            Taro.showToast({ title: '发送失败', icon: 'none' })
-          }
-        } else {
-          // 录音失败，显示错误信息
-          Taro.showToast({ title: result.errorMessage || '录音失败，请重试', icon: 'none' })
-        }
-      } else {
-        // 级联模式：停止录音并识别
-        console.log('级联模式：停止录音并识别')
-
-        // 先重置UI状态，让用户看到反馈
-        setIsRecording(false)
-        isRecordingRef.current = false
-        recordingStartedRef.current = false
-        isStoppingRecordingRef.current = true // 保持停止标志，防止重复调用
-        setRecordingTime(0)
-        setVolumeHistory([])
-        setCurrentVolume(0)
-
-        // 清除定时器
-        if (recordingTimer) {
-          clearInterval(recordingTimer)
-          setRecordingTimer(null)
-        }
-
-        // 异步进行语音识别
-        const result: ASRResult = await voiceService.stopRecording()
-
-        // 重置停止标志
-        isStoppingRecordingRef.current = false
-
-        console.log('识别结果:', result)
-
-        if (result.success && result.text) {
-          // 1. 设置识别的文字
-          setQuestion(result.text)
-
-          // 2. 直接提交消息，不通过 setQuestion 的方式
-          await submitQuestionMessage(result.text)
-
-          // 3. 清空输入框
-          setQuestion('')
-
-          // 4. 切换回语音输入模式
-          setInputMode('voice')
-
-          Taro.showToast({ title: '发送成功', icon: 'success' })
-        } else {
-          Taro.showToast({ title: result.errorMessage || '识别失败，请重试', icon: 'none' })
-        }
-      }
     } catch (error) {
-      console.error('录音处理失败:', error)
+      console.error('❌ 触摸结束处理失败:', error)
+      // 出错时重置UI状态
       setIsRecording(false)
       isRecordingRef.current = false
       recordingStartedRef.current = false
+      setIsCancelingRecording(false)
+      isCancelingRecordingRef.current = false
+      setRecordingTime(0)
+      setVolumeHistory([])
+      setCurrentVolume(0)
+    } finally {
+      // 重置全局标志位
       isStoppingRecordingRef.current = false
+    }
+  }
+
+  // 处理触摸取消事件（系统取消触摸，如来电、通知等）
+  const handleVoiceTouchCancel = async () => {
+    console.log('=== 触摸取消（系统中断）===')
+
+    const now = Date.now()
+    const timeSinceLastCall = now - handleVoiceTouchEndTimestampRef.current
+
+    // 同样的防重复检查
+    if (handleVoiceTouchEndCalledRef.current && timeSinceLastCall < 1000) {
+      console.log(`❌ 触摸取消正在处理中，忽略 (距离上次调用 ${timeSinceLastCall}ms)`)
+      return
+    }
+    handleVoiceTouchEndCalledRef.current = true
+    handleVoiceTouchEndTimestampRef.current = now
+
+    setTimeout(() => {
+      handleVoiceTouchEndCalledRef.current = false
+    }, 1000)
+
+    try {
+      // 检查是否在录音中
+      if (!isRecordingRef.current) {
+        console.log('❌ 没有正在进行的录音，忽略')
+        return
+      }
+
+      // 取消录音，不发送
+      console.log('✅ 系统中断，取消录音')
+      setIsRecording(false)
+      isRecordingRef.current = false
+      recordingStartedRef.current = false
       setRecordingTime(0)
       setVolumeHistory([])
       setCurrentVolume(0)
 
-      Taro.showToast({ title: '录音处理失败', icon: 'none' })
+      // 停止录音（不发送）
+      try {
+        await voiceService.stopRecording()
+      } catch (error) {
+        console.error('停止录音失败:', error)
+      }
+
+    } catch (error) {
+      console.error('❌ 触摸取消处理失败:', error)
+    } finally {
+      isStoppingRecordingRef.current = false
     }
   }
 
@@ -1051,7 +1110,9 @@ const Index = () => {
         return
       }
 
-      setIsSubmitting(true)
+      // ⭐ 如果不是从语音识别调用来的，才设置 isSubmitting
+      // （语音识别时已经在 stopRecordingAndSend 中设置过了）
+      // setIsSubmitting(true)  // ← 注释掉，避免重复设置
 
       // 添加用户消息到聊天记录
       const userMessage: ChatMessage = {
@@ -1061,6 +1122,17 @@ const Index = () => {
         timestamp: new Date().toISOString()
       }
       setChatMessages(prev => [...prev, userMessage])
+
+      // 添加加载消息，显示"正在思考"
+      const loadingMessageId = `loading_${Date.now()}`
+      const loadingMessage: ChatMessage = {
+        id: loadingMessageId,
+        role: 'assistant',
+        content: '',
+        timestamp: new Date().toISOString(),
+        isLoading: true
+      }
+      setChatMessages(prev => [...prev, loadingMessage])
 
       // 保存问题
       const questionData = {
@@ -1138,7 +1210,7 @@ const Index = () => {
       // 更新问题，添加回答
       updateQuestionWithAnswer(questionData.id, finalAnswer)
 
-      // 添加AI回答消息到聊天记录（显示文字回答）
+      // 先移除加载消息，再添加真实的AI回答
       const assistantMessage: ChatMessage = {
         id: Date.now().toString() + '_ans',
         role: 'assistant',
@@ -1147,7 +1219,13 @@ const Index = () => {
         curiosityQuestions: finalAnswer.curiosityQuestions,
         timestamp: new Date().toISOString()
       }
-      setChatMessages(prev => [...prev, assistantMessage])
+
+      setChatMessages(prev => {
+        // 移除加载消息，添加真实的AI回答
+        return prev
+          .filter(msg => !msg.isLoading) // 移除所有加载消息
+          .concat(assistantMessage) // 添加AI回答
+      })
 
       // 自动播放语音回答
       console.log('准备调用 autoPlayVoice，消息ID:', assistantMessage.id)
@@ -1167,9 +1245,15 @@ const Index = () => {
   // 取消录音
   const handleCancelRecording = async () => {
     try {
-      if (recordingTimer) {
-        clearInterval(recordingTimer)
+      // 清理定时器
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current)
+        recordingTimerRef.current = null
         setRecordingTimer(null)
+      }
+      if (volumeTimerRef.current) {
+        clearInterval(volumeTimerRef.current)
+        volumeTimerRef.current = null
       }
 
       setIsCancelingRecording(false)
@@ -1195,9 +1279,15 @@ const Index = () => {
   // 完成录音并发送
   const handleCompleteRecording = async () => {
     try {
-      if (recordingTimer) {
-        clearInterval(recordingTimer)
+      // 清理定时器
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current)
+        recordingTimerRef.current = null
         setRecordingTimer(null)
+      }
+      if (volumeTimerRef.current) {
+        clearInterval(volumeTimerRef.current)
+        volumeTimerRef.current = null
       }
 
       // 实时模式下直接发送
@@ -1357,15 +1447,6 @@ const Index = () => {
       // 直接播放问题
       await voiceService.playText(question, `${parentMessageId}_curiosity_0`)
 
-      // 提示用户
-      setTimeout(() => {
-        Taro.showToast({
-          title: '你可以继续探索这个问题',
-          icon: 'none',
-          duration: 2000
-        })
-      }, 1500)
-
     } catch (error) {
       console.error('播放继续探索问题失败:', error)
     }
@@ -1478,6 +1559,20 @@ const Index = () => {
                       {formatRelativeTime(message.timestamp)}
                     </Text>
                   </View>
+                ) : message.isLoading ? (
+                  // 加载中动画
+                  <View className="message-assistant">
+                    <View className="message-content-wrapper">
+                      <View className="loading-animation">
+                        <Text className="loading-text">正在思考中</Text>
+                        <View className="loading-dots">
+                          <View className="dot dot-1"></View>
+                          <View className="dot dot-2"></View>
+                          <View className="dot dot-3"></View>
+                        </View>
+                      </View>
+                    </View>
+                  </View>
                 ) : (
                   // AI回答
                   <View className="message-assistant">
@@ -1555,16 +1650,12 @@ const Index = () => {
                 onTouchStart={handleVoiceTouchStart}
                 onTouchMove={handleVoiceTouchMove}
                 onTouchEnd={handleVoiceTouchEnd}
+                onTouchCancel={handleVoiceTouchCancel}
               >
                 <View className="voice-input-content">
                   {isRecording ? (
                     /* 录音中状态 */
-                    <View
-                      className="recording-status"
-                      onTouchStart={handleVoiceTouchStart}
-                      onTouchMove={handleVoiceTouchMove}
-                      onTouchEnd={handleVoiceTouchEnd}
-                    >
+                    <View className="recording-status">
                       <Text className="recording-text">
                         {isCancelingRecording ? '松手取消' : '松开发送'}
                       </Text>
@@ -1577,14 +1668,21 @@ const Index = () => {
                         <View className="wave-bar" style={{ height: '8px', animationDelay: '0.4s' }}></View>
                       </View>
                     </View>
+                  ) : isSubmitting ? (
+                    /* 识别中状态 */
+                    <View className="voice-prompt recognizing">
+                      <View className="recognizing-indicator">
+                        <View className="recognizing-dots">
+                          <View className="recognizing-dot dot-1"></View>
+                          <View className="recognizing-dot dot-2"></View>
+                          <View className="recognizing-dot dot-3"></View>
+                        </View>
+                      </View>
+                      <Text className="voice-prompt-text">语音识别中</Text>
+                    </View>
                   ) : (
                     /* 默认状态：按住说话 */
-                    <View
-                      className="voice-prompt"
-                      onTouchStart={handleVoiceTouchStart}
-                      onTouchMove={handleVoiceTouchMove}
-                      onTouchEnd={handleVoiceTouchEnd}
-                    >
+                    <View className="voice-prompt">
                       <Image className="voice-prompt-icon-image" src={micIcon} />
                       <Text className="voice-prompt-text">按住说话</Text>
                     </View>

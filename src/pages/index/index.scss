@@ -1090,6 +1090,55 @@
   color: white;
 }
 
+/* 识别中状态 - 文字使用灰色 */
+.voice-prompt.recognizing .voice-prompt-text {
+  color: #999;  // ⭐ 灰色，更柔和
+  font-weight: 400;  // ⭐ 字重也轻一点
+}
+
+/* 识别中状态 */
+.recognizing-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 8px;
+}
+
+.recognizing-dots {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.recognizing-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  animation: recognizing-pulse 1.4s infinite ease-in-out both;
+
+  &.dot-1 {
+    animation-delay: -0.32s;
+  }
+  &.dot-2 {
+    animation-delay: -0.16s;
+  }
+  &.dot-3 {
+    animation-delay: 0s;
+  }
+}
+
+@keyframes recognizing-pulse {
+  0%, 80%, 100% {
+    transform: scale(0);
+    opacity: 0.5;
+  }
+  40% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
 /* 录音状态 - 显示波形和松开发送 */
 .recording-status {
   display: flex;
@@ -1302,4 +1351,60 @@
 
 .parent-entry-text {
   display: none;
+}
+
+/* 加载动画 */
+.loading-animation {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 48px;
+  min-width: 200px;
+}
+
+.loading-text {
+  font-size: 28px;
+  color: #999;
+  margin-bottom: 24px;
+  font-weight: 400;
+}
+
+.loading-dots {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  animation: bounce 1.4s infinite ease-in-out both;
+
+  &.dot-1 {
+    animation-delay: -0.32s;
+  }
+
+  &.dot-2 {
+    animation-delay: -0.16s;
+  }
+
+  &.dot-3 {
+    animation-delay: 0s;
+  }
+}
+
+@keyframes bounce {
+  0%,
+  80%,
+  100% {
+    transform: scale(0);
+    opacity: 0.5;
+  }
+  40% {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
