@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, unstable_flushSync as flushSync } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { View, Text, Textarea, Button, ScrollView, Canvas, Image } from '@tarojs/components'
 import Taro, { useRouter } from '@tarojs/taro'
 import { getChildInfo, saveChildInfo, saveQuestion, updateQuestionWithAnswer } from '../../store/child'
@@ -1021,30 +1021,18 @@ const Index = () => {
         return
       }
 
-      // ⭐ 使用 flushSync 强制立即更新UI，让用户松开按钮后马上看到反馈
-      console.log('✅✅✅ 使用 flushSync 立即更新按钮UI状态')
+      // ⭐ 立即更新UI状态，让用户松开按钮后马上看到反馈
+      console.log('✅✅✅ 立即更新按钮UI状态')
 
       // 📌 关键：先更新内部引用，防止后续逻辑错误
       // 但不要立即更新 isRecordingRef.current，让 stopRecordingAndSend 能正常执行
       // isRecordingRef.current 保持为 true
 
-      // 使用 flushSync 强制同步更新UI状态
-      try {
-        flushSync(() => {
-          setIsRecording(false)
-          setRecordingTime(0)
-          setVolumeHistory([])
-          setCurrentVolume(0)
-        })
-        console.log('✅✅✅ UI 已强制同步更新')
-      } catch (e) {
-        // 如果 flushSync 不可用（某些环境），使用普通方式
-        console.log('flushSync 不可用，使用普通方式更新')
-        setIsRecording(false)
-        setRecordingTime(0)
-        setVolumeHistory([])
-        setCurrentVolume(0)
-      }
+      // 立即更新UI状态
+      setIsRecording(false)
+      setRecordingTime(0)
+      setVolumeHistory([])
+      setCurrentVolume(0)
 
       // 震动反馈（立即执行）
       try {
@@ -1053,12 +1041,15 @@ const Index = () => {
         // 预览版可能不支持震动，忽略错误
       }
 
-      // ⭐ 立即执行停止录音逻辑
-      console.log('✅✅✅ 立即执行 stopRecordingAndSend')
-      stopRecordingAndSend().catch(error => {
-        console.error('❌ 停止录音失败:', error)
-        // 出错时重置状态
-        setIsSubmitting(false)
+      // ⭐ 使用微任务在下一个事件循环执行，避免阻塞 UI 更新
+      console.log('✅✅✅ 安排在微任务中执行 stopRecordingAndSend')
+      Promise.resolve().then(() => {
+        console.log('✅✅✅ 微任务执行 stopRecordingAndSend')
+        stopRecordingAndSend().catch(error => {
+          console.error('❌ 停止录音失败:', error)
+          // 出错时重置状态
+          setIsSubmitting(false)
+        })
       })
 
     } catch (error) {
