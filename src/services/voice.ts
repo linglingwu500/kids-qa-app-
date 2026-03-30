@@ -392,17 +392,14 @@ class VoiceService {
           const result = this.recorderManager.start(config)
           console.log('✅ recorderManager.start() 调用成功, 返回值:', result)
 
-          // 某些设备上，start()调用成功但onStart事件可能不触发或延迟
-          // 添加一个备用机制：如果start()返回成功，就认为录音已开始
-          // 延迟1000ms后，如果onStart还没触发，就直接resolve
-          setTimeout(() => {
-            if (this.startResolve) {
-              console.log('⚠️ onStart事件未触发，但start()调用成功，假设录音已启动')
-              this.startResolve()
-              // 注意：不要清理 startReject，因为后续可能还有错误事件
-              this.startResolve = null
-            }
-          }, 1000)
+          // ⭐ 优化：start() 调用成功后，立即 resolve，不需要等待 onStart
+          // onStart 事件主要用于日志确认，不影响录音功能
+          // 这样可以避免第二次录音时等待 onStart 导致的延迟
+          if (this.startResolve) {
+            console.log('✅ start() 调用成功，立即认为录音已启动')
+            this.startResolve()
+            this.startResolve = null
+          }
         } catch (startError) {
           console.error('❌ recorderManager.start() 调用失败:', startError)
           console.error('错误详情:', startError)

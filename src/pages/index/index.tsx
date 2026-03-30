@@ -611,47 +611,13 @@ const Index = () => {
 
       console.log('准备检查录音权限...')
 
-      // 检查录音权限
+      // ⭐ 优化权限检查：只检查明确的拒绝，其他情况直接尝试录音
+      // 这样可以兼容预览模式、真机等各种环境
       const setting = await Taro.getSetting()
       console.log('权限设置:', setting)
 
-      if (!setting.authSetting['scope.record']) {
-        console.log('首次请求录音权限')
-        try {
-          // 请求权限
-          await Taro.authorize({ scope: 'scope.record' })
-          console.log('录音权限授权成功')
-
-          // 权限授权成功后，不立即启动录音
-          // 因为用户必须松手去点击"允许"，现在已经松手了
-          // 显示提示，让用户重新按住按钮
-          Taro.showToast({
-            title: '请重新按住按钮开始录音',
-            icon: 'none',
-            duration: 2000
-          })
-
-          // 重置状态，让用户可以重新按住
-          setIsRecording(false)
-          isRecordingRef.current = false
-          recordingStartedRef.current = false
-
-          console.log('权限已授权，重置状态等待用户重新按住')
-          return
-        } catch (error) {
-          console.error('录音权限授权失败:', error)
-          Taro.showModal({
-            title: '需要录音权限',
-            content: '为了使用语音输入功能，请授权麦克风权限',
-            showCancel: false
-          })
-          // 重置状态
-          setIsRecording(false)
-          isRecordingRef.current = false
-          recordingStartedRef.current = false
-          return
-        }
-      } else if (setting.authSetting['scope.record'] === false) {
+      // 如果用户明确拒绝过，引导去设置
+      if (setting.authSetting['scope.record'] === false) {
         console.log('录音权限被拒绝')
         Taro.showModal({
           title: '录音权限被拒绝',
@@ -666,6 +632,8 @@ const Index = () => {
         return
       }
 
+      // ⭐ 其他情况（未授权、已授权、预览模式等）直接尝试启动录音
+      // 微信会自动处理权限弹窗（如果需要的话）
       console.log('准备开始录音...')
 
       // 清理之前的状态
