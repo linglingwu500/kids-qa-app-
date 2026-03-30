@@ -1021,14 +1021,11 @@ const Index = () => {
         return
       }
 
-      // ⭐ 立即更新UI状态，让用户松开按钮后马上看到反馈
-      console.log('✅✅✅ 立即更新按钮UI状态')
+      // ⭐ 立即设置识别中状态，给用户即时反馈
+      console.log('✅✅✅ 立即设置识别中状态')
+      setIsSubmitting(true)
 
-      // 📌 关键：先更新内部引用，防止后续逻辑错误
-      // 但不要立即更新 isRecordingRef.current，让 stopRecordingAndSend 能正常执行
-      // isRecordingRef.current 保持为 true
-
-      // 立即更新UI状态
+      // 立即更新UI状态，让用户松开按钮后马上看到反馈
       setIsRecording(false)
       setRecordingTime(0)
       setVolumeHistory([])
@@ -1041,16 +1038,15 @@ const Index = () => {
         // 预览版可能不支持震动，忽略错误
       }
 
-      // ⭐ 使用微任务在下一个事件循环执行，避免阻塞 UI 更新
-      console.log('✅✅✅ 安排在微任务中执行 stopRecordingAndSend')
-      Promise.resolve().then(() => {
-        console.log('✅✅✅ 微任务执行 stopRecordingAndSend')
-        stopRecordingAndSend().catch(error => {
-          console.error('❌ 停止录音失败:', error)
-          // 出错时重置状态
-          setIsSubmitting(false)
-        })
-      })
+      // ⭐ 直接同步执行停止录音逻辑
+      console.log('✅✅✅ 同步执行 stopRecordingAndSend')
+      try {
+        await stopRecordingAndSend()
+      } catch (error) {
+        console.error('❌ 停止录音失败:', error)
+        // 出错时重置状态
+        setIsSubmitting(false)
+      }
 
     } catch (error) {
       console.error('❌ 触摸结束处理失败:', error)
