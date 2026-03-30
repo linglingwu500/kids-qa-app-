@@ -974,17 +974,16 @@ const Index = () => {
 
       // ⭐ 立即更新UI状态，让用户松开按钮后马上看到反馈
       console.log('✅✅✅ 立即更新按钮UI状态')
-      console.log('更新前 isRecording:', isRecording)
 
-      // 📌 在预览版/开发者工具中，React setState 可能会延迟
-      // 所以我们先立即设置所有相关状态
+      // 📌 关键：先更新内部引用，防止后续逻辑错误
+      // 但不要立即更新 isRecordingRef.current，让 stopRecordingAndSend 能正常执行
+      // isRecordingRef.current 保持为 true
+
+      // 立即更新UI状态
       setIsRecording(false)
       setRecordingTime(0)
       setVolumeHistory([])
       setCurrentVolume(0)
-
-      // 立即更新内部引用，确保后续逻辑正确
-      isRecordingRef.current = false
 
       // 震动反馈（立即执行）
       try {
@@ -992,19 +991,23 @@ const Index = () => {
       } catch (e) {
         // 预览版可能不支持震动，忽略错误
       }
-      console.log('✅✅✅ 震动反馈已触发')
 
-      // ⭐ 异步执行停止录音（不阻塞UI）
-      console.log('✅✅✅ 异步执行停止录音')
-      // 使用 setTimeout 让 UI 有机会先更新
-      setTimeout(() => {
-        stopRecordingAndSend().catch(error => {
-          console.error('❌ 停止录音失败:', error)
-          // 出错时重置状态
-          setIsSubmitting(false)
-        })
-      }, 10) // 10ms 延迟，让 UI 先渲染
-      console.log('✅✅✅ stopRecordingAndSend 已调用（延迟10ms后执行）')
+      // ⭐ 使用 requestAnimationFrame 确保 UI 渲染后再执行后续逻辑
+      console.log('✅✅✅ 安排异步执行停止录音')
+
+      // 方案：使用 requestAnimationFrame + setTimeout 双重保险
+      requestAnimationFrame(() => {
+        console.log('✅✅✅ requestAnimationFrame 回调执行')
+        // 在下一帧执行，确保 UI 已更新
+        setTimeout(() => {
+          console.log('✅✅✅ 延迟执行 stopRecordingAndSend')
+          stopRecordingAndSend().catch(error => {
+            console.error('❌ 停止录音失败:', error)
+            // 出错时重置状态
+            setIsSubmitting(false)
+          })
+        }, 50) // 50ms 延迟，确保 UI 完全渲染
+      })
 
     } catch (error) {
       console.error('❌ 触摸结束处理失败:', error)
