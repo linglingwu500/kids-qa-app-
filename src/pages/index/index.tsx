@@ -825,22 +825,19 @@ const Index = () => {
 
   // 停止录音并发送（点击交互）
   const stopRecordingAndSend = async () => {
-    const now = Date.now()
-    const timeSinceLastCall = now - stopRecordingAndSendTimestampRef.current
-
-    // 时间戳检查：如果距离上次调用不到1秒，忽略
-    if (timeSinceLastCall < 1000) {
-      console.log(`❌ stopRecordingAndSend 正在处理中，忽略重复调用 (距离上次调用 ${timeSinceLastCall}ms)`)
+    // 使用标志位防止重复调用（而不是时间戳）
+    if (isStoppingRecordingRef.current) {
+      console.log('❌ stopRecordingAndSend 正在处理中，忽略重复调用')
       return
     }
-    stopRecordingAndSendTimestampRef.current = now
-    console.log('✅ stopRecordingAndSend 设置时间戳:', now)
+    isStoppingRecordingRef.current = true
 
     try {
       console.log('=== 停止录音并发送 ===')
 
       if (!isRecordingRef.current) {
         console.log('没有正在进行的录音')
+        isStoppingRecordingRef.current = false
         return
       }
 
@@ -992,25 +989,6 @@ const Index = () => {
 
   // 录音触摸结束
   const handleVoiceTouchEnd = async (e?: any) => {
-    const now = Date.now()
-    const timeSinceLastCall = now - handleVoiceTouchEndTimestampRef.current
-
-    // 使用时间戳和布尔标志双重检查，防止重复调用
-    if (handleVoiceTouchEndCalledRef.current && timeSinceLastCall < 1000) {
-      console.log(`❌ 触摸结束正在处理中，忽略重复调用 (距离上次调用 ${timeSinceLastCall}ms)`)
-      return
-    }
-    handleVoiceTouchEndCalledRef.current = true
-    handleVoiceTouchEndTimestampRef.current = now
-
-    console.log('✅ 设置防重复标志，时间戳:', now)
-
-    // 设置一个定时器，在较长时间后重置标志（允许下次调用）
-    setTimeout(() => {
-      console.log('⏰ 重置防重复标志')
-      handleVoiceTouchEndCalledRef.current = false
-    }, 1000) // 增加到 1000ms 冷却时间
-
     try {
       console.log('=== 触摸结束 ===')
       console.log('当前状态 - isRecordingRef:', isRecordingRef.current)
