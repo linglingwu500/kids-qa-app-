@@ -865,9 +865,10 @@ const Index = () => {
       console.log('✅ 更新内部逻辑状态')
       isRecordingRef.current = false
 
-      // ⭐ 设置识别中状态（显示"语音识别中"）
-      console.log('✅ 设置识别中状态')
-      setIsSubmitting(true)
+      // ⭐ 不在这里设置识别中状态，让用户先看到"按住说话"
+      // 等到真正开始识别时再设置
+      console.log('✅ 延迟设置识别中状态')
+      // setIsSubmitting(true)  // ← 移除，延迟到识别时再设置
 
       // 如果是实时模式，处理不同
       if (voiceService.getMode() === 'doubao-realtime') {
@@ -1019,6 +1020,9 @@ const Index = () => {
       setVolumeHistory([])
       setCurrentVolume(0)
 
+      // ⏱️ 记录状态更新时间
+      console.log('⏱️ 状态更新完成时间:', Date.now())
+
       // 震动反馈（立即执行）
       try {
         Taro.vibrateShort({ type: 'light' })
@@ -1026,16 +1030,15 @@ const Index = () => {
         // 预览版可能不支持震动，忽略错误
       }
 
-      // ⭐ 使用 Taro.nextTick 确保 UI 更新后再执行停止录音
-      console.log('✅✅✅ 使用 nextTick 后执行 stopRecordingAndSend')
-      Taro.nextTick(() => {
-        console.log('✅✅✅ nextTick 回调执行，调用 stopRecordingAndSend')
-        stopRecordingAndSend().catch(error => {
-          console.error('❌ 停止录音失败:', error)
-          // 出错时重置状态
-          setIsSubmitting(false)
-        })
-      })
+      // ⭐ 直接执行停止录音（不使用nextTick，让它同步执行）
+      console.log('✅✅✅ 直接执行 stopRecordingAndSend')
+      try {
+        await stopRecordingAndSend()
+      } catch (error) {
+        console.error('❌ 停止录音失败:', error)
+        // 出错时重置状态
+        setIsSubmitting(false)
+      }
 
     } catch (error) {
       console.error('❌ 触摸结束处理失败:', error)
