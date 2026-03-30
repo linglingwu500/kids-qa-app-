@@ -611,29 +611,78 @@ const Index = () => {
 
       console.log('准备检查录音权限...')
 
-      // ⭐ 优化权限检查：只检查明确的拒绝，其他情况直接尝试录音
-      // 这样可以兼容预览模式、真机等各种环境
+      // ⭐ 优化权限检查：处理第一次使用和已拒绝的情况
       const setting = await Taro.getSetting()
       console.log('权限设置:', setting)
+      console.log('录音权限状态:', setting.authSetting['scope.record'])
 
-      // 如果用户明确拒绝过，引导去设置
+      // 情况1：用户明确拒绝过
       if (setting.authSetting['scope.record'] === false) {
         console.log('录音权限被拒绝')
         Taro.showModal({
-          title: '录音权限被拒绝',
-          content: '请在设置中开启麦克风权限',
+          title: '需要录音权限',
+          content: '请在设置中开启麦克风权限，以便使用语音输入功能',
           confirmText: '去设置',
+          showCancel: false,
           success: (res) => {
             if (res.confirm) {
               Taro.openSetting()
             }
           }
         })
+        // 重置状态
+        setIsRecording(false)
+        isRecordingRef.current = false
+        recordingStartedRef.current = false
         return
       }
 
-      // ⭐ 其他情况（未授权、已授权、预览模式等）直接尝试启动录音
-      // 微信会自动处理权限弹窗（如果需要的话）
+      // 情况2：第一次使用（未授权）
+      // 预览版：setting.authSetting['scope.record'] 可能是 undefined
+      // 真机：setting.authSetting['scope.record'] 可能是 undefined
+      if (!setting.authSetting['scope.record']) {
+        console.log('首次使用录音功能')
+        // 不直接启动录音，而是提示用户先授权
+        // 这样用户可以准备好，不会在按住说话时被打断
+        const res = await Taro.showModal({
+          title: '需要录音权限',
+          content: '使用语音输入需要麦克风权限，是否现在授权？',
+          confirmText: '去授权',
+          cancelText: '稍后再说',
+          showCancel: true
+        })
+
+        if (res.confirm) {
+          // 用户选择授权，引导到设置或自动触发授权
+          try {
+            await Taro.authorize({ scope: 'scope.record' })
+            console.log('录音权限授权成功')
+            // 授权成功后，提示用户重新按住
+            Taro.showToast({
+              title: '授权成功！请重新按住按钮开始录音',
+              icon: 'success',
+              duration: 2000
+            })
+          } catch (err) {
+            console.log('用户拒绝授权:', err)
+            Taro.showToast({
+              title: '需要录音权限才能使用语音输入',
+              icon: 'none',
+              duration: 2000
+            })
+          }
+        } else {
+          console.log('用户选择稍后授权')
+        }
+
+        // 重置状态
+        setIsRecording(false)
+        isRecordingRef.current = false
+        recordingStartedRef.current = false
+        return
+      }
+
+      // 情况3：已授权，直接开始录音
       console.log('准备开始录音...')
 
       // 清理之前的状态
