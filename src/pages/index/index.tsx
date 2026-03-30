@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { View, Text, Textarea, Button, ScrollView, Canvas, Image } from '@tarojs/components'
 import Taro, { useRouter } from '@tarojs/taro'
+import { flushSync } from 'react-dom'
 import { getChildInfo, saveChildInfo, saveQuestion, updateQuestionWithAnswer } from '../../store/child'
 import { generateChildFriendlyAnswer } from '../../services/ai'
 import { formatRelativeTime } from '../../utils/format'
@@ -1021,18 +1022,30 @@ const Index = () => {
         return
       }
 
-      // ⭐ 立即更新UI状态，让用户松开按钮后马上看到反馈
-      console.log('✅✅✅ 立即更新按钮UI状态')
+      // ⭐ 使用 flushSync 强制立即更新UI，让用户松开按钮后马上看到反馈
+      console.log('✅✅✅ 使用 flushSync 立即更新按钮UI状态')
 
       // 📌 关键：先更新内部引用，防止后续逻辑错误
       // 但不要立即更新 isRecordingRef.current，让 stopRecordingAndSend 能正常执行
       // isRecordingRef.current 保持为 true
 
-      // 立即更新UI状态
-      setIsRecording(false)
-      setRecordingTime(0)
-      setVolumeHistory([])
-      setCurrentVolume(0)
+      // 使用 flushSync 强制同步更新UI状态
+      try {
+        flushSync(() => {
+          setIsRecording(false)
+          setRecordingTime(0)
+          setVolumeHistory([])
+          setCurrentVolume(0)
+        })
+        console.log('✅✅✅ UI 已强制同步更新')
+      } catch (e) {
+        // 如果 flushSync 不可用（某些环境），使用普通方式
+        console.log('flushSync 不可用，使用普通方式更新')
+        setIsRecording(false)
+        setRecordingTime(0)
+        setVolumeHistory([])
+        setCurrentVolume(0)
+      }
 
       // 震动反馈（立即执行）
       try {
@@ -1041,21 +1054,12 @@ const Index = () => {
         // 预览版可能不支持震动，忽略错误
       }
 
-      // ⭐ 使用 requestAnimationFrame 确保 UI 渲染后再执行后续逻辑
-      console.log('✅✅✅ 安排异步执行停止录音')
-
-      // 方案：使用 requestAnimationFrame + setTimeout 双重保险
-      requestAnimationFrame(() => {
-        console.log('✅✅✅ requestAnimationFrame 回调执行')
-        // 在下一帧执行，确保 UI 已更新
-        setTimeout(() => {
-          console.log('✅✅✅ 延迟执行 stopRecordingAndSend')
-          stopRecordingAndSend().catch(error => {
-            console.error('❌ 停止录音失败:', error)
-            // 出错时重置状态
-            setIsSubmitting(false)
-          })
-        }, 50) // 50ms 延迟，确保 UI 完全渲染
+      // ⭐ 立即执行停止录音逻辑
+      console.log('✅✅✅ 立即执行 stopRecordingAndSend')
+      stopRecordingAndSend().catch(error => {
+        console.error('❌ 停止录音失败:', error)
+        // 出错时重置状态
+        setIsSubmitting(false)
       })
 
     } catch (error) {
