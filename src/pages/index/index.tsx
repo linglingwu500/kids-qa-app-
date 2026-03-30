@@ -790,13 +790,6 @@ const Index = () => {
 
       console.log('停止录音')
 
-      // ⭐ 立即更新UI状态（无论从哪里调用，都要立即更新UI）
-      console.log('✅ 立即更新UI状态')
-      setIsRecording(false)
-      setRecordingTime(0)
-      setVolumeHistory([])
-      setCurrentVolume(0)
-
       // 清理定时器（使用 ref 确保能访问到最新的定时器）
       if (recordingTimerRef.current) {
         console.log('✅ 清理录音计时器')
@@ -979,12 +972,25 @@ const Index = () => {
         return
       }
 
-      // 异步执行停止录音（会更新UI状态）
-      console.log('✅ 异步执行停止录音')
-      await stopRecordingAndSend()
+      // ⭐ 立即更新UI状态，让用户松开按钮后马上看到反馈
+      console.log('✅ 立即更新按钮UI状态')
+      setIsRecording(false)
+      setRecordingTime(0)
+      setVolumeHistory([])
+      setCurrentVolume(0)
 
       // 震动反馈
       Taro.vibrateShort({ type: 'light' })
+
+      // ⭐ 异步执行停止录音（不阻塞UI）
+      console.log('✅ 异步执行停止录音')
+      // 不使用 await，让后台处理
+      stopRecordingAndSend().catch(error => {
+        console.error('❌ 停止录音失败:', error)
+        // 出错时重置状态
+        isRecordingRef.current = false
+        setIsSubmitting(false)
+      })
 
     } catch (error) {
       console.error('❌ 触摸结束处理失败:', error)
