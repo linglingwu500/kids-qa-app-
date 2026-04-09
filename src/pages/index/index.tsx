@@ -86,6 +86,7 @@ const Index = () => {
   const isCancelingRecordingRef = React.useRef(false)
   const recordingStartedRef = React.useRef(false) // 跟踪录音是否真的启动成功了
   const isStoppingRecordingRef = React.useRef(false) // 防止重复停止录音
+  const startRecordingCanceledRef = React.useRef(false) // 跟踪 startRecording 是否被取消
   const handleVoiceTouchEndCalledRef = React.useRef(false) // 防止重复调用 handleVoiceTouchEnd
   const handleVoiceTouchEndTimestampRef = React.useRef(0) // 记录上次调用的时间戳
   const stopRecordingAndSendTimestampRef = React.useRef(0) // 记录 stopRecordingAndSend 上次调用的时间戳
@@ -612,12 +613,15 @@ const Index = () => {
     try {
       console.log('=== 开始录音 ===')
 
+      // 重置取消标志
+      startRecordingCanceledRef.current = false
+
       // 注意：不要在这里检查 isRecordingRef.current，因为调用者已经设置过了
       // 如果需要防止重复调用，应该在调用者层面处理
 
       console.log('准备检查录音权限...')
 
-      // ⭐ 优化权限检查：处理第一次使用和已拒绝的情况
+      // ⭐ 优化权限检查：只检查用户是否明确拒绝过
       const setting = await Taro.getSetting()
       console.log('权限设置:', setting)
       console.log('录音权限状态:', setting.authSetting['scope.record'])
@@ -638,58 +642,16 @@ const Index = () => {
         })
         // 重置状态
         setIsRecording(false)
+        setShowRecordingUI(false)  // ⭐ 重置录音UI状态
         isRecordingRef.current = false
         recordingStartedRef.current = false
+        startRecordingCanceledRef.current = false  // ⭐ 重置取消标志
         return
       }
 
-      // 情况2：第一次使用（未授权）
-      // 预览版：setting.authSetting['scope.record'] 可能是 undefined
-      // 真机：setting.authSetting['scope.record'] 可能是 undefined
-      if (!setting.authSetting['scope.record']) {
-        console.log('首次使用录音功能')
-        // 不直接启动录音，而是提示用户先授权
-        // 这样用户可以准备好，不会在按住说话时被打断
-        const res = await Taro.showModal({
-          title: '需要录音权限',
-          content: '使用语音输入需要麦克风权限，是否现在授权？',
-          confirmText: '去授权',
-          cancelText: '稍后再说',
-          showCancel: true
-        })
-
-        if (res.confirm) {
-          // 用户选择授权，引导到设置或自动触发授权
-          try {
-            await Taro.authorize({ scope: 'scope.record' })
-            console.log('录音权限授权成功')
-            // 授权成功后，提示用户重新按住
-            Taro.showToast({
-              title: '授权成功！请重新按住按钮开始录音',
-              icon: 'success',
-              duration: 2000
-            })
-          } catch (err) {
-            console.log('用户拒绝授权:', err)
-            Taro.showToast({
-              title: '需要录音权限才能使用语音输入',
-              icon: 'none',
-              duration: 2000
-            })
-          }
-        } else {
-          console.log('用户选择稍后授权')
-        }
-
-        // 重置状态
-        setIsRecording(false)
-        isRecordingRef.current = false
-        recordingStartedRef.current = false
-        return
-      }
-
-      // 情况3：已授权，直接开始录音
-      console.log('准备开始录音...')
+      // 情况2：第一次使用或已授权，直接调用录音API
+      // 微信会自动处理授权流程
+      console.log('准备开始录音（会自动触发授权框，如果未授权）...')
 
       // 清理之前的状态
       setRecordingTime(0)
@@ -737,6 +699,37 @@ const Index = () => {
           numberOfChannels: 1
         })
 
+        // ⭐ 只在首次使用（未授权）时，启动自动重置定时器
+        // 因为微信授权框会阻止 onTouchEnd 事件
+        const isFirstTime = !setting.authSetting['scope.record']
+        console.log('是否首次使用:', isFirstTime)
+
+        if (isFirstTime) {
+          const autoResetTimer = setTimeout(() => {
+            console.log('⏰ 首次使用，0.5秒后设置取消标志并重置UI')
+            // 设置取消标志，让录音启动后自动停止
+            startRecordingCanceledRef.current = true
+            // 重置UI
+            setShowRecordingUI(false)
+            setIsRecording(false)
+            isRecordingRef.current = false
+            setRecordingTime(0)
+            setVolumeHistory([])
+            setCurrentVolume(0)
+
+            // 如果录音还未启动，提示用户授权
+            if (!recordingStartedRef.current) {
+              Taro.showToast({
+                title: '请先允许麦克风权限',
+                icon: 'none',
+                duration: 2000
+              })
+            } else {
+              console.log('✅ 录音已启动，将会自动停止')
+            }
+          }, 500)
+        }
+
         // 添加超时保护，延长到10秒
         const startTime = Date.now()
         const timeout = new Promise((_, reject) =>
@@ -763,6 +756,43 @@ const Index = () => {
         recordingStartedRef.current = true
         console.log('设置 recordingStarted = true')
 
+        // ⭐ 检查是否在启动期间被取消（用户松开了按钮）
+        if (startRecordingCanceledRef.current) {
+          console.log('⚠️ 录音启动成功，但用户已取消（startRecordingCanceledRef = true），立即停止录音并重置UI')
+          // 立即停止录音
+          try {
+            await voiceService.stopRecording()
+            console.log('✅ 录音已停止')
+          } catch (e) {
+            console.error('停止录音失败:', e)
+          }
+          // 重置所有状态（包括UI）
+          console.log('🔄 重置所有状态，确保UI恢复')
+          setIsRecording(false)
+          setShowRecordingUI(false)  // ⭐ 关键：确保UI重置
+          setRecordingTime(0)
+          setVolumeHistory([])
+          setCurrentVolume(0)
+          setIsCancelingRecording(false)
+          isRecordingRef.current = false
+          recordingStartedRef.current = false
+          isCancelingRecordingRef.current = false
+          startRecordingCanceledRef.current = false
+          isStoppingRecordingRef.current = false
+          // 清理定时器
+          if (recordingTimerRef.current) {
+            clearInterval(recordingTimerRef.current)
+            recordingTimerRef.current = null
+            setRecordingTimer(null)
+          }
+          if (volumeTimerRef.current) {
+            clearInterval(volumeTimerRef.current)
+            volumeTimerRef.current = null
+          }
+          console.log('✅ 所有状态已重置，UI应该恢复到"按住说话"')
+          return
+        }
+
         Taro.vibrateShort({ type: 'medium' })
         console.log('=== 录音已启动 ===')
       } catch (error) {
@@ -785,8 +815,9 @@ const Index = () => {
         }
 
         // 立即重置状态
-        console.log('立即重置 isRecording = false')
+        console.log('立即重置 isRecording = false, showRecordingUI = false')
         setIsRecording(false)
+        setShowRecordingUI(false)  // ⭐ 同时重置录音UI
         isRecordingRef.current = false
 
         // 根据错误类型显示不同提示
@@ -838,6 +869,34 @@ const Index = () => {
       if (!isRecordingRef.current) {
         console.log('没有正在进行的录音')
         isStoppingRecordingRef.current = false
+        return
+      }
+
+      // ⭐ 检查录音是否真正启动（可能还在等待授权）
+      if (!recordingStartedRef.current) {
+        console.log('⚠️ 录音还未真正启动（可能在等待授权），设置取消标志并重置UI')
+        console.log('📍 设置 startRecordingCanceledRef = true')
+        // 设置取消标志，告诉 startRecording 不要继续
+        startRecordingCanceledRef.current = true
+        // 清理定时器
+        if (recordingTimerRef.current) {
+          clearInterval(recordingTimerRef.current)
+          recordingTimerRef.current = null
+          setRecordingTimer(null)
+        }
+        if (volumeTimerRef.current) {
+          clearInterval(volumeTimerRef.current)
+          volumeTimerRef.current = null
+        }
+        // 重置所有状态
+        console.log('📍 重置所有UI状态')
+        isRecordingRef.current = false
+        setShowRecordingUI(false)
+        setRecordingTime(0)
+        setVolumeHistory([])
+        setCurrentVolume(0)
+        isStoppingRecordingRef.current = false
+        console.log('✅ UI状态已重置，等待 startRecording 检测取消标志')
         return
       }
 
@@ -1030,15 +1089,13 @@ const Index = () => {
         // 预览版可能不支持震动，忽略错误
       }
 
-      // ⭐ 直接执行停止录音（不使用nextTick，让它同步执行）
-      console.log('✅✅✅ 直接执行 stopRecordingAndSend')
-      try {
-        await stopRecordingAndSend()
-      } catch (error) {
+      // ⭐ 异步执行停止录音，不阻塞 UI
+      console.log('✅✅✅ 异步执行 stopRecordingAndSend')
+      stopRecordingAndSend().catch((error) => {
         console.error('❌ 停止录音失败:', error)
         // 出错时重置状态
         setIsSubmitting(false)
-      }
+      })
 
     } catch (error) {
       console.error('❌ 触摸结束处理失败:', error)

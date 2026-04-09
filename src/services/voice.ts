@@ -260,7 +260,11 @@ class VoiceService {
     try {
       console.log('=== 初始化音频播放器 ===')
       this.innerAudio = Taro.createInnerAudioContext()
-
+      if (this.innerAudio) {
+        Taro.setInnerAudioOption({
+          obeyMuteSwitch: false
+        })
+      }
       // 设置音频播放模式
       this.innerAudio.obeyMuteSwitch = false  // 不遵循静音开关
       this.innerAudio.autoplay = false  // 不自动播放
@@ -391,15 +395,10 @@ class VoiceService {
         try {
           const result = this.recorderManager.start(config)
           console.log('✅ recorderManager.start() 调用成功, 返回值:', result)
-
-          // ⭐ 优化：start() 调用成功后，立即 resolve，不需要等待 onStart
-          // onStart 事件主要用于日志确认，不影响录音功能
-          // 这样可以避免第二次录音时等待 onStart 导致的延迟
-          if (this.startResolve) {
-            console.log('✅ start() 调用成功，立即认为录音已启动')
-            this.startResolve()
-            this.startResolve = null
-          }
+          console.log('⏳ 等待 onStart 事件触发...')
+          // ⭐ 不在这里 resolve，而是等待 onStart 事件触发
+          // 这样可以确保只有在录音真正启动后才完成 Promise
+          // 特别是在用户需要授权的情况下，onStart 只会在授权后触发
         } catch (startError) {
           console.error('❌ recorderManager.start() 调用失败:', startError)
           console.error('错误详情:', startError)
@@ -696,11 +695,30 @@ class VoiceService {
   async synthesizeSpeech(text: string): Promise<TTSResult> {
     try {
       console.log('=== 开始语音合成 ===')
-      console.log('文本:', text)
+      console.log('原始文本长度:', text.length)
+
+      // ⭐ 限制文本长度，避免超过 TTS API 限制（豆包限制约500字）
+      const MAX_TEXT_LENGTH = 450
+      let textToSynthesize = text
+      if (text.length > MAX_TEXT_LENGTH) {
+        console.log('⚠️ 文本过长，截断到', MAX_TEXT_LENGTH, '字符')
+        textToSynthesize = text.substring(0, MAX_TEXT_LENGTH)
+        // 尝试在句子结尾处截断
+        const lastPeriod = textToSynthesize.lastIndexOf('。')
+        const lastExclamation = textToSynthesize.lastIndexOf('！')
+        const lastQuestion = textToSynthesize.lastIndexOf('？')
+        const lastPunctuation = Math.max(lastPeriod, lastExclamation, lastQuestion)
+        if (lastPunctuation > MAX_TEXT_LENGTH * 0.8) {
+          textToSynthesize = text.substring(0, lastPunctuation + 1)
+        }
+        console.log('截断后长度:', textToSynthesize.length)
+      }
+
+      console.log('合成文本:', textToSynthesize)
 
       // 如果使用豆包级联模式，调用豆包 TTS
       if (VOICE_CONFIG.mode === 'doubao-cascade') {
-        return await this.doubaoTTS(text)
+        return await this.doubaoTTS(textToSynthesize)
       }
 
       // 模拟网络请求延迟
